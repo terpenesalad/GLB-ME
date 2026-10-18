@@ -136,7 +136,7 @@ export class Editor {
       else { this.vp.frame(null, false); }
       if (importFiles) await this.handleFiles(importFiles, true);
       if (!data && !importFiles && project.start) await this.startWith(project.start);
-      this.doc.dirty = false; this.doc.changeCount = 0;
+      this.doc.dirty = !data; this.doc.changeCount = 0; // brand-new projects are saved even if untouched
       this.doc.history.clear();
     } catch (e) {
       console.error(e); b.close();
