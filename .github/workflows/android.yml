@@ -31,11 +31,22 @@ jobs:
 
       - name: Resolve version
         id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          BASE=$(tr -d ' \n\r' < version.txt)
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]] && ! gh release view "v$BASE" >/dev/null 2>&1; then
+            # a version bump in version.txt on main publishes a new release automatically
+            echo "name=$BASE" >> "$GITHUB_OUTPUT"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "tag=v$BASE" >> "$GITHUB_OUTPUT"
           else
-            echo "name=1.0.0-dev.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+            echo "name=$BASE-dev.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Unit tests + release APK
@@ -62,16 +73,17 @@ jobs:
           path: dist/*
 
       - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.ver.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
         run: |
           NOTES_FILE=RELEASE_NOTES.md
-          [ -f "$NOTES_FILE" ] || echo "GLB&ME ${GITHUB_REF_NAME}" > "$NOTES_FILE"
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          [ -f "$NOTES_FILE" ] || echo "GLB&ME ${TAG}" > "$NOTES_FILE"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
           else
-            gh release create "$GITHUB_REF_NAME" dist/* --title "GLB&ME ${GITHUB_REF_NAME}" --notes-file "$NOTES_FILE" --latest
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "GLB&ME ${TAG}" --notes-file "$NOTES_FILE" --latest
           fi
 
       - name: Report build failure

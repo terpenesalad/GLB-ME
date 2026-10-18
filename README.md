@@ -68,7 +68,7 @@ Requirements: JDK 17, Android SDK (compileSdk 35).
 The app has **no third-party dependencies** – pure Kotlin + Android framework + OpenGL ES 3.0. Core geometry, file formats and sculpting live in `app/src/main/java/app/glbandme/core` and are covered by JVM unit tests.
 
 ### Releases
-Pushing a `v*` tag runs `.github/workflows/android.yml`, which tests, builds and signs the APK and publishes a GitHub release.
+`.github/workflows/android.yml` tests, builds and signs the APK on every push. Bumping `version.txt` on `main` (or pushing a `v*` tag) publishes a GitHub release with the APK attached.
 Signing uses the repository secrets `RELEASE_KEYSTORE_BASE64`, `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD` when present; otherwise it falls back to the bundled `signing/release.jks` so every build can update the previous install. **For a public Play Store release, add your own private keystore as secrets** (the bundled key is public).
 
 ## License
