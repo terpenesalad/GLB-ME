@@ -92,6 +92,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: desktop-*
           merge-multiple: true
 
       - name: Attach to release
@@ -106,5 +107,6 @@ jobs:
             gh release create "$TAG" --title "GLB&ME $VERSION" --notes "GLB&ME $VERSION" --target "$GITHUB_SHA"
           fi
           gh release upload "$TAG" artifacts/* --clobber
+          for stray in home.png editor.png failure.png; do gh release delete-asset "$TAG" "$stray" -y 2>/dev/null || true; done
           python3 .github/scripts/release_notes.py "$VERSION" > notes.md
           gh release edit "$TAG" --notes-file notes.md
