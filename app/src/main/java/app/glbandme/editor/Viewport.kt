@@ -76,7 +76,7 @@ class Viewport(ctx: Context, val ed: Editor, msaa: Boolean) : GLSurfaceView(ctx)
                     outlineSelected = (ed.tool == Tool.TRANSFORM || ed.tool == Tool.SELECT) && !gizmo.suppressed
                     if (ed.tool == Tool.SELECT) {
                         editWire = true
-                        if (ed.faces.mesh === ed.scene.selected?.mesh) editSelection = ed.faces.version to ed.faces.list()
+                        synchronized(ed.scene) { if (ed.faces.mesh === ed.scene.selected?.mesh) editSelection = ed.faces.version to ed.faces.list() }
                     }
                 }
                 synchronized(ed.scene) {

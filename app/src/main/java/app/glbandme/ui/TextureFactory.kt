@@ -70,11 +70,12 @@ object TextureFactory {
     }
 
     /** Re-encode a texture no larger than [maxSize] (export option). Returns the original when already small. */
-    fun downscale(t: Texture, maxSize: Int, forceJpeg: Boolean = false): Pair<ByteArray, String> {
+    fun downscale(t: Texture, maxSize: Int, forceJpeg: Boolean = false, pngOrJpegOnly: Boolean = false): Pair<ByteArray, String> {
         val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(t.bytes, 0, t.bytes.size, o)
         if (o.outWidth <= 0) return t.bytes to t.mimeType
-        if (o.outWidth <= maxSize && o.outHeight <= maxSize && !forceJpeg) return t.bytes to t.mimeType
+        val okFormat = !pngOrJpegOnly || t.mimeType == "image/png" || t.mimeType == "image/jpeg"
+        if (o.outWidth <= maxSize && o.outHeight <= maxSize && !forceJpeg && okFormat) return t.bytes to t.mimeType
         var sample = 1
         while (o.outWidth / (sample * 2) >= maxSize && o.outHeight / (sample * 2) >= maxSize) sample *= 2
         val b = BitmapFactory.decodeByteArray(t.bytes, 0, t.bytes.size, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return t.bytes to t.mimeType

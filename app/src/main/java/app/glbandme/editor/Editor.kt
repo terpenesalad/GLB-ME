@@ -111,7 +111,7 @@ class Editor(val scene: Scene) {
 
     fun setTool(t: Tool) {
         tool = t
-        if (t == Tool.SELECT) faces.bind(scene.selected?.mesh)
+        if (t == Tool.SELECT) locked { faces.bind(scene.selected?.mesh) }
         notify(Change.TOOL)
     }
 
@@ -122,7 +122,7 @@ class Editor(val scene: Scene) {
     // =========================================================================================
     fun select(o: SceneObject?) {
         locked { scene.selected = o }
-        if (tool == Tool.SELECT) faces.bind(o?.mesh)
+        if (tool == Tool.SELECT) locked { faces.bind(o?.mesh) }
         notify(Change.SELECTION)
     }
 
@@ -341,14 +341,14 @@ class Editor(val scene: Scene) {
             o.text = null
             extra?.invoke()
         }
-        if (tool == Tool.SELECT) faces.bind(newMesh)
+        if (tool == Tool.SELECT) locked { faces.bind(newMesh) }
         undo.push(LambdaAction(label, {
             locked { o.mesh = old; o.primitive = oldPrim; o.text = oldText }
-            if (tool == Tool.SELECT) faces.bind(old)
+            if (tool == Tool.SELECT) locked { faces.bind(old) }
             notify(Change.TOPOLOGY, Change.EDIT_SELECTION)
         }, {
             locked { o.mesh = newMesh; o.primitive = null; o.text = null }
-            if (tool == Tool.SELECT) faces.bind(newMesh)
+            if (tool == Tool.SELECT) locked { faces.bind(newMesh) }
             notify(Change.TOPOLOGY, Change.EDIT_SELECTION)
         }, (old.vertexCount + newMesh.vertexCount) * 48L + (old.indices.size + newMesh.indices.size) * 4L))
         notify(Change.TOPOLOGY, Change.EDIT_SELECTION)
@@ -466,25 +466,41 @@ class Editor(val scene: Scene) {
     // =========================================================================================
     fun editOp(label: String, op: (FaceSelection) -> Pair<Mesh, BooleanArray?>?) {
         val o = scene.selected ?: return
-        faces.bind(o.mesh)
+        locked { faces.bind(o.mesh) }
         val r = locked { op(faces) } ?: return
         val (newMesh, newSel) = r
         swapMesh(label, o, { newMesh })
-        faces.rebind(newMesh, newSel ?: BooleanArray(newMesh.triangleCount))
+        locked { faces.rebind(newMesh, newSel ?: BooleanArray(newMesh.triangleCount)) }
         notify(Change.EDIT_SELECTION, Change.TOPOLOGY)
     }
 
     fun separateSelection(copyOnly: Boolean) {
         val o = scene.selected ?: return
-        faces.bind(o.mesh)
-        val part = faces.extract() ?: return
+        locked { faces.bind(o.mesh) }
+        val part = locked { faces.extract() } ?: return
         val newObj = SceneObject(o.name + if (copyOnly) " part" else " separated", part, o.material.copy())
         newObj.position.set(o.position); newObj.rotation.set(o.rotation); newObj.scale.set(o.scale)
-        if (!copyOnly) {
-            val rest = faces.deleteFaces() ?: return
-            swapMesh("Separate", o, { rest })
+        if (copyOnly) { addObject(newObj, "Duplicate faces"); return }
+        val rest = locked { faces.deleteFaces() } ?: return
+        // one undo step for "remove faces from the original + add them as a new object"
+        val oldMesh = o.mesh; val oldPrim = o.primitive; val oldText = o.text
+        val before = listSnapshot()
+        locked {
+            o.mesh = rest; o.primitive = null; o.text = null
+            newObj.name = scene.uniqueName(newObj.name)
+            scene.objects.add(scene.objects.indexOf(o) + 1, newObj)
+            scene.selected = newObj
+            if (tool == Tool.SELECT) faces.bind(newObj.mesh)
         }
-        addObject(newObj, if (copyOnly) "Duplicate faces" else "Separate")
+        val after = listSnapshot()
+        undo.push(LambdaAction("Separate", {
+            locked { scene.objects.clear(); scene.objects.addAll(before.first); scene.selected = before.second; o.mesh = oldMesh; o.primitive = oldPrim; o.text = oldText; if (tool == Tool.SELECT) faces.bind(scene.selected?.mesh) }
+            notify(Change.OBJECTS, Change.SELECTION, Change.TOPOLOGY, Change.EDIT_SELECTION)
+        }, {
+            locked { scene.objects.clear(); scene.objects.addAll(after.first); scene.selected = after.second; o.mesh = rest; o.primitive = null; o.text = null; if (tool == Tool.SELECT) faces.bind(scene.selected?.mesh) }
+            notify(Change.OBJECTS, Change.SELECTION, Change.TOPOLOGY, Change.EDIT_SELECTION)
+        }, (oldMesh.vertexCount + rest.vertexCount + part.vertexCount) * 48L))
+        notify(Change.OBJECTS, Change.SELECTION, Change.TOPOLOGY, Change.EDIT_SELECTION)
     }
 
     // =========================================================================================
@@ -607,7 +623,7 @@ class Editor(val scene: Scene) {
     /** Colour the vertices of the selected faces with the paint colour. */
     fun fillSelectionColor() {
         val o = scene.selected ?: return
-        faces.bind(o.mesh)
+        locked { faces.bind(o.mesh) }
         val verts = faces.selectedVertices()
         if (verts.isEmpty()) return
         val lin = app.glbandme.core.scene.Color.hexToLinear(paintColor)
@@ -708,8 +724,9 @@ class Editor(val scene: Scene) {
 
     /** Give every visible object the selected object's material (one undo step). */
     fun materialToAll() {
+        if (scene.selected?.light != null) return
         val src = scene.selected?.material ?: return
-        val targets = scene.objects.filter { it.visible && it !== scene.selected }
+        val targets = scene.objects.filter { it.visible && it !== scene.selected && it.light == null }
         val before = targets.associateWith { it.material.copy() }
         locked { for (o in targets) o.material.copyFrom(src) }
         val after = src.copy()
@@ -725,7 +742,19 @@ class Editor(val scene: Scene) {
         if (cur < 1e-7f || size <= 0f) return
         val k = size / cur
         val s = o.scale.copy()
-        if (uniform) s.set(s.x * k, s.y * k, s.z * k) else s[axis] = s[axis] * k
+        if (uniform) s.set(s.x * k, s.y * k, s.z * k) else s[localAxisFor(o, axis)] = s[localAxisFor(o, axis)] * k
         setTransform(o, s = s, label = "Set size")
+    }
+
+    /** The object's local axis that points most along world axis [worldAxis] (for rotated objects). */
+    fun localAxisFor(o: SceneObject, worldAxis: Int): Int {
+        var best = worldAxis; var bestDot = -1f
+        for (i in 0 until 3) {
+            val v = Vec3(); v[i] = 1f
+            val w = o.rotation.rotate(v)
+            val d = kotlin.math.abs(w[worldAxis])
+            if (d > bestDot) { bestDot = d; best = i }
+        }
+        return best
     }
 }

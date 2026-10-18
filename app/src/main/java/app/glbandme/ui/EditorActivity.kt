@@ -108,6 +108,7 @@ class EditorActivity : BaseActivity() {
     private var sheetKey: String? = null
     private var sheetPages: List<Pair<String, () -> Panel>> = emptyList()
     private var sheetPage = 0
+    private var lastInspectPage = INSPECT_OBJECT
     private var panel: Panel? = null
     val currentPanel: Panel? get() = panel
 
@@ -207,7 +208,7 @@ class EditorActivity : BaseActivity() {
         }
         railBtn("layers", Icon.LAYERS, "Layers") { openLayers() }
         railBtn("add", Icon.PLUS, "Add") { openAdd() }
-        railBtn("inspect", Icon.SLIDERS, "Inspect") { openInspector(sheetPage.takeIf { sheetKey == "inspect" } ?: INSPECT_OBJECT) }
+        railBtn("inspect", Icon.SLIDERS, "Inspect") { openInspector(lastInspectPage) }
         railBtn("view", Icon.SUN, "View") { openView() }
         root.addView(rail, flp(WRAP, WRAP))
 
@@ -332,11 +333,11 @@ class EditorActivity : BaseActivity() {
         } else 0f
         val sx = if (right > 0) -(right / w) else 0f
         viewport.viewShiftY = sy
-        viewport.viewShiftX = if (Theme.leftHanded) 0f else sx
+        viewport.viewShiftX = sx
         // move the rail / navigator out from under a side sheet
-        val shift = if (sheet.dock == SheetHost.Dock.SIDE && !Theme.leftHanded) -right.toFloat() else 0f
-        rail.translationX = shift
-        overlay.navShiftX = shift
+        val shift = if (sheet.dock == SheetHost.Dock.SIDE) -right.toFloat() else 0f
+        if (!Theme.leftHanded) rail.translationX = shift
+        overlay.navShiftX = if (Theme.leftHanded) 0f else shift
         overlay.invalidate()
     }
 
@@ -449,6 +450,7 @@ class EditorActivity : BaseActivity() {
     private fun switchPage(i: Int) {
         panel?.onClosed()
         sheetPage = i
+        if (sheetKey == "inspect") lastInspectPage = i
         panel = sheetPages[i].second()
         sheet.setActions(panel!!.headerActions())
         sheet.setContent(panel!!.build())
@@ -466,9 +468,9 @@ class EditorActivity : BaseActivity() {
     fun openLayers() = openSheet("layers", "Layers", listOf("Layers" to { LayersPanel(this) }))
     fun openAdd() = openSheet("add", "Add", listOf("Add" to { AddPanel(this) }))
     fun openView() = openSheet("view", "View", listOf("View" to { RenderPanel(this) }))
-    fun openInspector(page: Int = INSPECT_OBJECT) = openSheet("inspect", "Inspect", listOf(
+    fun openInspector(page: Int = INSPECT_OBJECT) = run { lastInspectPage = page }.let { openSheet("inspect", "Inspect", listOf(
         "Object" to { ObjectPanel(this) }, "Material" to { MaterialPanel(this) }, "Mesh" to { MeshPanel(this) }
-    ), page)
+    ), page) }
     fun openBrushOptions() = openPanel("brush", BrushPanel(this))
     fun openAnimationSettings() = openPanel("anim", AnimatePanel(this))
 
@@ -530,6 +532,7 @@ class EditorActivity : BaseActivity() {
 
     fun status(text: String?, autoHideMs: Long = 0) {
         statusView.removeCallbacks(hideStatus)
+        statusView.animate().cancel()
         if (text == null) { statusView.visibility = View.GONE; return }
         statusView.text = text
         statusView.alpha = 1f
@@ -624,7 +627,7 @@ class EditorActivity : BaseActivity() {
     private fun saveCopy() {
         val m = meta ?: return
         val progress = Dialogs.progress(this, "Saving copy…")
-        async({ store.create(store.uniqueName("${m.name} copy"), editor.scene) }, onError = { progress.dismiss(); showError(it) }) { nm ->
+        async({ editor.locked { store.create(store.uniqueName("${m.name} copy"), editor.scene) } }, onError = { progress.dismiss(); showError(it) }) { nm ->
             progress.dismiss()
             meta = nm; updateTitle(); save(false)
             status("Now editing “${nm.name}”", 1600)
@@ -713,6 +716,7 @@ class EditorActivity : BaseActivity() {
             }
             REQ_FONT -> { val cb = fontCallback; fontCallback = null; cb?.invoke(uri) }
             REQ_IMPORT -> {
+                if (!::editor.isInitialized) return
                 val cb = importCallback
                 importCallback = null
                 if (cb != null) { cb(uri); return }
@@ -731,6 +735,7 @@ class EditorActivity : BaseActivity() {
                 }
             }
             REQ_IMAGE -> {
+                if (!::editor.isInitialized) return
                 val cb = imageCallback ?: return
                 imageCallback = null
                 async({

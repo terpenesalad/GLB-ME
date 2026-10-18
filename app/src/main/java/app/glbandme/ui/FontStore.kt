@@ -39,7 +39,7 @@ object FontStore {
 
     fun name(ctx: Context, id: String): String = all(ctx).firstOrNull { it.id == id }?.name ?: id.substringAfter(':').substringBeforeLast('.')
 
-    private val cache = HashMap<String, Typeface>()
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, Typeface>()
 
     /** Typeface for an id; missing imported fonts fall back to the default sans. */
     fun typeface(ctx: Context, id: String, bold: Boolean = false, italic: Boolean = false): Typeface {

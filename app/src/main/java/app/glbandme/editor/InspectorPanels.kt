@@ -140,7 +140,7 @@ class ObjectRow(ctx: Context, val o: SceneObject, private val selected: Boolean)
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
         if (e.actionMasked == MotionEvent.ACTION_UP && e.x > width - dp(48f)) {
-            pressedNow = false; invalidate(); onEye?.invoke(); return true
+            cancelPress(); onEye?.invoke(); return true
         }
         return super.onTouchEvent(e)
     }
@@ -276,7 +276,7 @@ class ObjectPanel(act: EditorActivity) : Panel(act) {
             f.onChange = { v -> ed.locked {
                 val cur = (o.worldBounds().let { (p, q) -> q - p })[i].coerceAtLeast(1e-6f)
                 val k = (v / units.perMeter).coerceAtLeast(1e-5f) / cur
-                if (uniform) o.scale.set(o.scale.x * k, o.scale.y * k, o.scale.z * k) else o.scale[i] = o.scale[i] * k
+                if (uniform) o.scale.set(o.scale.x * k, o.scale.y * k, o.scale.z * k) else { val li = ed.localAxisFor(o, i); o.scale[li] = o.scale[li] * k }
             }; ed.requestRender() }
             f.onCommit = commit
             dimRow.addView(f, LinearLayout.LayoutParams(0, dp(38), 1f))

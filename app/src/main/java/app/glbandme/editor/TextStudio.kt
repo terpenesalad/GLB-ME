@@ -99,8 +99,15 @@ class TextStudioPanel(act: EditorActivity, private val o: SceneObject, private v
         }
     }
 
+    private var closed = false
+
     override fun onClosed() {
+        if (closed) return
+        closed = true
         act.sheet.removeCallbacks(rebuildRunnable)
+        gen.incrementAndGet() // late async builds must not land after the commit
+        // make sure the last edit is in the mesh before committing it
+        if (spec.text.isNotBlank() && o.text != spec) runCatching { TextMesh.build(act, spec) }.getOrNull()?.let { ed.setTextMesh(o, spec, it) }
         if (o.text != beforeSpec || o.mesh !== beforeMesh) {
             if (!fresh) ed.commitText(o, beforeMesh, beforeSpec, beforePos)
             ed.notify(Change.OBJECTS)

@@ -110,6 +110,11 @@ abstract class PressableView(ctx: Context) : View(ctx) {
 
     override fun performClick(): Boolean { super.performClick(); onClick?.invoke(); return true }
 
+    /** Drop a pending long-press and the pressed look (used by custom hit zones). */
+    fun cancelPress() { removeCallbacks(longRunnable); if (pressedNow) { pressedNow = false; pressAnim(false); invalidate() } }
+
+    override fun onDetachedFromWindow() { removeCallbacks(longRunnable); super.onDetachedFromWindow() }
+
     override fun performLongClick(): Boolean {
         val l = onLongClick ?: return super.performLongClick()
         l(); return true

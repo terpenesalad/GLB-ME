@@ -214,11 +214,15 @@ class StickerPanel(act: EditorActivity, private val tex: app.glbandme.core.scene
         val work = { app.glbandme.core.mesh.Decal.build(target.mesh, f, w, h, size * wrap, lift) }
         if (sync) { work()?.let { sticker.mesh = it }; return }
         val id = gen.incrementAndGet()
-        act.async({ act.editor.locked { work() } }, onError = {}) { m ->
-            if (id != gen.get() || m == null) return@async
-            act.editor.locked { sticker.mesh = m }
-            act.editor.notify(Change.TOPOLOGY)
-        }
+        // debounce slider ticks; only the newest request does any work
+        act.sheet.postDelayed({
+            if (id != gen.get()) return@postDelayed
+            act.async({ if (id != gen.get()) null else work() }, onError = {}) { m ->
+                if (id != gen.get() || m == null) return@async
+                act.editor.locked { sticker.mesh = m }
+                act.editor.notify(Change.TOPOLOGY)
+            }
+        }, 50)
     }
 
     override fun build(): View {
@@ -234,7 +238,7 @@ class StickerPanel(act: EditorActivity, private val tex: app.glbandme.core.scene
         root.addView(PanelUi.twoButtons(act,
             PanelUi.button(act, "Move", Icon.MOVE) {
                 act.beginPlacement("Tap a new spot for the sticker") { hit, _, _ ->
-                    if (hit == null || hit.obj !== target) { act.status("Tap the same model", 900); false } else {
+                    if (hit == null || (hit.obj !== target && hit.obj !== sticker)) { act.status("Tap the same model", 900); false } else {
                         center = hit.localPos; normal = hit.localNormal; buildMesh()
                         act.openPanel("sticker", this); true
                     }

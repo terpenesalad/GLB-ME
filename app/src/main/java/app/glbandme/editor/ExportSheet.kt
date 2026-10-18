@@ -102,8 +102,7 @@ object ExportSheet {
                 synchronized(texCache) {
                     texCache.getOrPut("${t.uid}:$max:$needPngJpeg") {
                         val limit = if (max == 0) 16384 else max
-                        if (needPngJpeg && t.mimeType == "image/webp") TextureFactory.downscale(t, limit, forceJpeg = false).let { (b, m) -> if (m == "image/webp") b to "image/png" else b to m }
-                        else TextureFactory.downscale(t, limit)
+                        TextureFactory.downscale(t, limit, pngOrJpegOnly = needPngJpeg)
                     }
                 }
             }

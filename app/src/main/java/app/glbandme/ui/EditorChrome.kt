@@ -105,7 +105,8 @@ class SheetHost(ctx: Context) : FrameLayout(ctx) {
         dock = if (wantSide) Dock.SIDE else Dock.BOTTOM
         sideWidth = min(dp(380), (w * 0.5f).toInt())
         mediumH = max(dp(300), (h * 0.46f).toInt())
-        largeH = h - topLimit
+        largeH = maxOf(h - topLimit, dp(80))
+        mediumH = minOf(mediumH, largeH)
         val lp = layoutParams as? LayoutParams ?: return
         if (dock == Dock.SIDE) {
             grabber.visibility = GONE
@@ -123,7 +124,7 @@ class SheetHost(ctx: Context) : FrameLayout(ctx) {
             lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             lp.topMargin = 0
             if (height0 == 0) height0 = mediumH
-            height0 = height0.coerceIn(dp(160), largeH)
+            height0 = height0.coerceIn(minOf(dp(160), largeH), largeH)
             lp.height = height0
             (card.background as GradientDrawable).cornerRadii = floatArrayOf(dp(22f), dp(22f), dp(22f), dp(22f), 0f, 0f, 0f, 0f)
             card.setPadding(0, 0, 0, insets.bottom)
@@ -168,8 +169,13 @@ class SheetHost(ctx: Context) : FrameLayout(ctx) {
     }
 
     fun open() {
+        if (isOpen && visibility == VISIBLE) {
+            // already open (maybe still sliding in): make sure it finishes in place
+            if (translationX != 0f || translationY != 0f) animate().translationX(0f).translationY(0f).setDuration(Theme.anim(160))
+                .setUpdateListener { reportCoverage() }.withEndAction { reportCoverage() }.start()
+            return
+        }
         animate().cancel()
-        if (isOpen && visibility == VISIBLE) return
         isOpen = true
         visibility = VISIBLE
         anim?.cancel()
@@ -211,7 +217,7 @@ class SheetHost(ctx: Context) : FrameLayout(ctx) {
     }
 
     private fun setHeight(h: Int) {
-        height0 = h.coerceIn(dp(120), largeH)
+        height0 = h.coerceIn(minOf(dp(120), largeH), largeH)
         (layoutParams as LayoutParams).height = height0
         requestLayout()
         reportCoverage()
@@ -365,12 +371,13 @@ class HintBubble(ctx: Context) : LinearLayout(ctx) {
         text.setLineSpacing(0f, 1.15f)
         addView(text, LayoutParams(0, WRAP, 1f).apply { leftMargin = dp(10); rightMargin = dp(8) })
         addView(ok, LayoutParams(WRAP, dp(40)))
-        ok.onClick = { hide() }
+        ok.onClick = { onDismiss?.invoke(); hide() }
         visibility = GONE
         accessibilityLiveRegion = ACCESSIBILITY_LIVE_REGION_POLITE
     }
 
     fun show(ic: Icon, msg: String) {
+        animate().cancel()
         icon.ic = ic; icon.invalidate()
         text.text = msg
         visibility = VISIBLE
@@ -381,8 +388,9 @@ class HintBubble(ctx: Context) : LinearLayout(ctx) {
 
     fun hide() {
         if (visibility != VISIBLE) return
-        animate().alpha(0f).setDuration(Theme.anim(160)).withEndAction { visibility = GONE; onDismiss?.invoke() }.start()
-        if (Theme.reduceMotion) { visibility = GONE; onDismiss?.invoke() }
+        animate().cancel()
+        if (Theme.reduceMotion) { visibility = GONE; return }
+        animate().alpha(0f).setDuration(160).withEndAction { visibility = GONE }.start()
     }
 }
 
