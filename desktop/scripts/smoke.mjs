@@ -10,7 +10,8 @@ app.process().stdout?.on('data', (d) => process.stdout.write('[app] ' + d));
 app.process().stderr?.on('data', (d) => process.stdout.write('[app] ' + d));
 const page = await app.firstWindow({ timeout: 60000 });
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+const warnings = [];
+page.on('console', (m) => { if (m.type() === 'error') warnings.push('console: ' + m.text()); });
 try {
   await page.waitForSelector('.create', { timeout: 30000 });
   const visible = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map((w) => w.isVisible()));
@@ -31,5 +32,7 @@ try {
   await page.screenshot({ path: `${out}/failure.png` }).catch(() => {});
 }
 await app.close().catch(() => {});
-if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
+const gh = (kind, msg) => console.log(`::${kind} title=smoke ${process.platform}::${msg.replace(/\r?\n/g, ' | ').slice(0, 900)}`);
+for (const w of warnings.slice(0, 10)) gh('warning', w);
+if (errors.length) { for (const e of errors) gh('error', e); process.exit(1); }
 console.log('smoke test passed');
