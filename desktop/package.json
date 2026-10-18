@@ -113,7 +113,8 @@
           ]
         }
       ],
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "executableName": "GLB-ME"
     },
     "nsis": {
       "oneClick": false,
@@ -124,7 +125,8 @@
       "shortcutName": "GLB&ME",
       "artifactName": "GLB-ME-Setup-${version}.${ext}",
       "uninstallDisplayName": "GLB&ME",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
     },
     "portable": {
       "artifactName": "GLB-ME-${version}-portable.${ext}"

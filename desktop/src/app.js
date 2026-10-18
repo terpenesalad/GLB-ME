@@ -137,7 +137,15 @@ class App {
   }
   openEditor(p, data = null, files = null) {
     mount(this.root);
-    this.editor = new Editor(this, this.root);
+    try {
+      this.editor = new Editor(this, this.root);
+    } catch (e) {
+      console.error(e);
+      this.editor = null;
+      this.showHome();
+      modal({ title: '3D view unavailable', icon: 'triangle-alert', body: h('p', { class: 'muted', style: { fontSize: '14px' } }, 'GLB&ME couldn’t start the 3D viewport (WebGL): ' + e.message + '. Updating your graphics driver usually fixes this. Your projects are safe.') });
+      return;
+    }
     this.editor.open(p, data, files);
   }
   async closeEditor() {

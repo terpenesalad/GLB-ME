@@ -1,7 +1,6 @@
 // GLB&ME desktop – Electron main process: window, file system access for projects and fonts,
 // native open/save dialogs and "open with" file handling.
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Menu, protocol, net } = require('electron');
-const { pathToFileURL } = require('url');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Menu, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -10,6 +9,19 @@ const isMac = process.platform === 'darwin';
 // The UI is served from app://glbandme/ (a privileged, sandboxed scheme) so fetch() works for bundled assets.
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 const distDir = path.join(__dirname, '..', 'dist');
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.glb': 'model/gltf-binary', '.woff': 'font/woff', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.svg': 'image/svg+xml' };
+// WebGL must work even on PCs without a usable GPU driver (VMs, remote desktop): allow the software fallback.
+app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+
+// ---- logging & fatal errors: write to <userData>/logs/main.log and tell the user instead of failing silently
+let logFile = null;
+function log(...a) {
+  const line = `[${new Date().toISOString()}] ${a.map((x) => (x instanceof Error ? x.stack : typeof x === 'string' ? x : JSON.stringify(x))).join(' ')}\n`;
+  try { if (!logFile) { const d = path.join(app.getPath('userData'), 'logs'); fs.mkdirSync(d, { recursive: true }); logFile = path.join(d, 'main.log'); } fs.appendFileSync(logFile, line); } catch { /* ignore */ }
+}
+process.on('uncaughtException', (e) => { log('uncaught', e); try { dialog.showErrorBox('GLB&ME hit a problem', `${e && e.message}\n\nDetails were saved to:\n${logFile || 'the logs folder'}`); } catch { /* ignore */ } });
+process.on('unhandledRejection', (e) => log('unhandled rejection', e));
 let win = null;
 let pendingOpen = [];
 const allowedFiles = new Set();
@@ -31,10 +43,14 @@ function createWindow() {
     titleBarOverlay: isMac ? false : { color: '#00000000', symbolColor: '#d8d8de', height: 46 },
     trafficLightPosition: { x: 16, y: 15 },
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
-    show: false,
+    show: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false, spellcheck: false },
   });
-  win.once('ready-to-show', () => win.show());
+  const wc = win.webContents;
+  wc.on('did-fail-load', (_e, code, desc, url) => { log('did-fail-load', code, desc, url); if (url.startsWith('app://')) showError(`The interface failed to load (${desc}, ${code}).`); });
+  wc.on('render-process-gone', (_e, d) => { log('render-process-gone', d); if (d.reason !== 'clean-exit') showError(`The editor stopped unexpectedly (${d.reason}). Your projects are saved automatically.`, true); });
+  wc.on('preload-error', (_e, p, err) => log('preload-error', p, err));
+  wc.on('console-message', (_e, level, message, line, source) => { if (level >= 3) log('renderer', message, source + ':' + line); });
   // let the renderer save the open project before the window goes away
   let allowClose = false;
   win.on('close', (e) => {
@@ -51,14 +67,28 @@ function createWindow() {
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('app://glbandme/')) { e.preventDefault(); if (/^https:\/\//.test(url)) shell.openExternal(url); } });
 }
 
+function showError(msg, reloadable = false) {
+  if (!win || win.isDestroyed()) return;
+  if (!win.isVisible()) win.show();
+  const html = `<!doctype html><meta charset="utf-8"><body style="margin:0;background:#0b0b0e;color:#f5f5f7;font:15px system-ui,Segoe UI,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;-webkit-app-region:drag">
+    <div style="max-width:520px;padding:32px;-webkit-app-region:no-drag"><h2 style="margin:0 0 10px">GLB&amp;ME couldn’t start</h2><p style="color:#b4b4bc;line-height:1.5">${msg.replace(/</g, '&lt;')}</p>
+    <p style="color:#8a8a93;font-size:13px">Log file: ${String(logFile || '').replace(/</g, '&lt;')}</p>
+    ${reloadable ? '<button onclick="location.href=\'app://glbandme/index.html\'" style="background:#6e56f7;color:#fff;border:0;border-radius:10px;padding:10px 18px;font:inherit">Reload</button>' : ''}</div></body>`;
+  win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html)).catch(() => {});
+}
+
 // ---- single instance + "open with" ---------------------------------------------------------
 const fileArgs = (argv) => argv.filter((a) => /\.(glb|gltf|obj|stl|ply|fbx)$/i.test(a) && fs.existsSync(a));
-if (!app.requestSingleInstanceLock()) app.quit();
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) { app.quit(); }
 else {
   app.on('second-instance', (_e, argv) => {
     const files = fileArgs(argv);
     files.forEach((f) => allowedFiles.add(path.resolve(f)));
-    if (win) { if (win.isMinimized()) win.restore(); win.focus(); files.forEach((f) => win.webContents.send('open-file', f)); }
+    if (!win || win.isDestroyed()) { pendingOpen.push(...files); if (app.isReady()) createWindow(); return; }
+    if (win.isMinimized()) win.restore();
+    win.show(); win.focus();
+    files.forEach((f) => win.webContents.send('open-file', f));
   });
 }
 app.on('open-file', (e, file) => {
@@ -68,12 +98,20 @@ app.on('open-file', (e, file) => {
   else { pendingOpen.push(file); if (app.isReady()) createWindow(); }
 });
 
-app.whenReady().then(() => {
+if (gotLock) app.whenReady().then(() => {
+  log('start', app.getVersion(), process.platform, process.arch, process.versions.electron);
+  // serve the bundled UI straight from the app archive (works inside app.asar on every OS)
   protocol.handle('app', (req) => {
-    const u = new URL(req.url);
-    const file = path.normalize(path.join(distDir, decodeURIComponent(u.pathname)));
-    if (!file.startsWith(distDir + path.sep)) return new Response('forbidden', { status: 403 });
-    return net.fetch(pathToFileURL(file).toString());
+    try {
+      const u = new URL(req.url);
+      const file = path.normalize(path.join(distDir, decodeURIComponent(u.pathname)));
+      if (!file.startsWith(distDir + path.sep)) return new Response('forbidden', { status: 403 });
+      const data = fs.readFileSync(file);
+      return new Response(data, { status: 200, headers: { 'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream' } });
+    } catch (e) {
+      log('protocol', req.url, e);
+      return new Response('not found', { status: 404 });
+    }
   });
   ensureDirs();
   pendingOpen.push(...fileArgs(process.argv.slice(1)));
@@ -84,7 +122,8 @@ app.whenReady().then(() => {
   else Menu.setApplicationMenu(null);
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
-});
+}).catch((e) => { log('startup', e); dialog.showErrorBox('GLB&ME couldn’t start', String(e && e.stack || e)); app.quit(); });
+app.on('child-process-gone', (_e, d) => log('child-process-gone', d));
 app.on('window-all-closed', () => { if (!isMac) app.quit(); });
 
 // ---- IPC: projects ---------------------------------------------------------------------------

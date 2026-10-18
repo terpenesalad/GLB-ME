@@ -23,10 +23,13 @@ jobs:
         include:
           - os: windows-latest
             target: --win --x64
+            exe: release/win-unpacked/GLB-ME.exe
           - os: macos-latest
             target: --mac
+            exe: release/mac-universal/GLB&ME.app/Contents/MacOS/GLB&ME
           - os: ubuntu-latest
             target: --linux
+            exe: release/linux-unpacked/glbandme-desktop
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     defaults:
@@ -52,6 +55,18 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
           GH_TOKEN: ${{ github.token }}
         run: npx electron-builder ${{ matrix.target }} --publish never
+
+      - name: Smoke test the packaged app (launch, open editor, save)
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a node scripts/smoke.mjs "${{ matrix.exe }}" smoke; else node scripts/smoke.mjs "${{ matrix.exe }}" smoke; fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-${{ matrix.os }}
+          path: desktop/smoke/*
+          if-no-files-found: ignore
 
       - name: Collect
         shell: bash
