@@ -19,6 +19,7 @@ class Bvh private constructor(val mesh: Mesh) {
     private var order = IntArray(0)
     private var nodes = 0
     var topology = -1; private set
+    private var lastRefit = 0L
     var geometry = -1; private set
 
     class Hit(var t: Float = Float.MAX_VALUE, var tri: Int = -1, var u: Float = 0f, var v: Float = 0f)
@@ -171,12 +172,19 @@ class Bvh private constructor(val mesh: Mesh) {
         private const val LEAF = 6
         private val cache = WeakHashMap<Mesh, Bvh>()
 
+        /**
+         * Cached BVH for [mesh]. [maxStaleMs] > 0 allows slightly stale bounds (skips refits for
+         * that long) which keeps picking cheap on huge meshes during a sculpt stroke.
+         */
         @Synchronized
-        fun of(mesh: Mesh): Bvh {
+        fun of(mesh: Mesh, maxStaleMs: Long = 0): Bvh {
             var b = cache[mesh]
             if (b == null || b.topology != mesh.topologyVersion) {
-                b = Bvh(mesh); b.build(); cache[mesh] = b
-            } else if (b.geometry != mesh.geometryVersion) b.refit()
+                b = Bvh(mesh); b.build(); cache[mesh] = b; b.lastRefit = System.nanoTime()
+            } else if (b.geometry != mesh.geometryVersion) {
+                val now = System.nanoTime()
+                if (maxStaleMs <= 0 || now - b.lastRefit > maxStaleMs * 1_000_000L) { b.refit(); b.lastRefit = now }
+            }
             return b
         }
     }
@@ -189,7 +197,7 @@ object Picking {
         val localPos: Vec3, val localNormal: Vec3, val distance: Float, val tri: Int
     )
 
-    fun pick(scene: Scene, origin: Vec3, dir: Vec3, only: SceneObject? = null): SceneHit? {
+    fun pick(scene: Scene, origin: Vec3, dir: Vec3, only: SceneObject? = null, maxStaleMs: Long = 0): SceneHit? {
         var best: SceneHit? = null
         val inv = FloatArray(16)
         for (o in scene.objects) {
@@ -200,7 +208,7 @@ object Picking {
             val lo = Mat4.transformPoint(inv, origin)
             val ld = Mat4.transformDir(inv, dir)
             val hit = Bvh.Hit()
-            if (!Bvh.of(o.mesh).raycast(lo.x, lo.y, lo.z, ld.x, ld.y, ld.z, hit)) continue
+            if (!Bvh.of(o.mesh, maxStaleMs).raycast(lo.x, lo.y, lo.z, ld.x, ld.y, ld.z, hit)) continue
             val lp = Vec3(lo.x + ld.x * hit.t, lo.y + ld.y * hit.t, lo.z + ld.z * hit.t)
             val wp = Mat4.transformPoint(m, lp)
             val dist = wp.distance(origin)

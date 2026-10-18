@@ -74,6 +74,34 @@ class SculptTests {
     }
 }
 
+class RepeatStrokeTests {
+    @Test fun consecutiveStrokesReuseCachesCorrectly() {
+        val o = app.glbandme.core.scene.SceneObject("s", Primitives.quadSphere(0.5f, 24))
+        val engine = SculptEngine()
+        val s = BrushSettings().apply { intensity = 0.8f; symmetry[0] = false }
+        val before = o.mesh.positions.copyOf()
+        engine.begin(o, BrushType.DRAW, s, 0.15f)
+        engine.dab(Vec3(0f, 0f, 0.5f), 0.15f, 1f, null)
+        val u1 = engine.end()!!
+        // second stroke elsewhere with cached grid
+        engine.begin(o, BrushType.DRAW, s, 0.15f)
+        engine.dab(Vec3(0f, 0.5f, 0f), 0.15f, 1f, null)
+        val u2 = engine.end()!!
+        var top = false
+        for (v in 0 until o.mesh.vertexCount) if (o.mesh.positions[v * 3 + 1] > 0.52f) top = true
+        assertTrue("second stroke must find vertices via the cached grid", top)
+        u2.undo(); u1.undo()
+        // after external undo, grid must be rebuilt and strokes still work
+        engine.begin(o, BrushType.INFLATE, s, 0.15f)
+        engine.dab(Vec3(0.5f, 0f, 0f), 0.15f, 1f, null)
+        assertNotNull(engine.end())
+        u1.redo(); u1.undo()
+        var diffElsewhere = 0f
+        for (v in 0 until o.mesh.vertexCount) if (o.mesh.positions[v * 3] < 0.2f) for (k in 0 until 3) diffElsewhere += abs(before[v * 3 + k] - o.mesh.positions[v * 3 + k])
+        assertEquals(0f, diffElsewhere, 1e-5f)
+    }
+}
+
 class SeamTests {
     @Test fun wrapSeamsAndPolesAreWelded() {
         val cases = mapOf(

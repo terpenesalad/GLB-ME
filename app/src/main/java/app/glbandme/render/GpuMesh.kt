@@ -163,8 +163,11 @@ class GpuMesh(val mesh: Mesh) {
         if (version == selVersion) return
         selVersion = version
         if (tris == null || tris.isEmpty()) { selCount = 0; return }
-        val idx = IntArray(tris.size * 3)
-        for (i in tris.indices) { val t = tris[i]; idx[i * 3] = mesh.indices[t * 3]; idx[i * 3 + 1] = mesh.indices[t * 3 + 1]; idx[i * 3 + 2] = mesh.indices[t * 3 + 2] }
+        val tc = mesh.triangleCount
+        val valid = tris.filter { it in 0 until tc }
+        val idx = IntArray(valid.size * 3)
+        for (i in valid.indices) { val t = valid[i]; idx[i * 3] = mesh.indices[t * 3]; idx[i * 3 + 1] = mesh.indices[t * 3 + 1]; idx[i * 3 + 2] = mesh.indices[t * 3 + 2] }
+        if (idx.isEmpty()) { selCount = 0; return }
         glBindVertexArray(0)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, selIbo)
         val ib = ByteBuffer.allocateDirect(idx.size * 4).order(ByteOrder.nativeOrder()).asIntBuffer()

@@ -516,18 +516,29 @@ class EditorActivity : BaseActivity() {
         ))
     }
 
-    fun save(feedback: Boolean, after: (() -> Unit)? = null) {
+    /**
+     * Persist the project. With [withThumb] the GL view renders a fresh thumbnail first (only
+     * while the view is running – onPause saves without it because the GL thread stops).
+     */
+    fun save(feedback: Boolean, withThumb: Boolean = true, after: (() -> Unit)? = null) {
         val m = meta ?: return
         if (!::editor.isInitialized) return
-        viewport.capture(384, false) { thumb ->
+        editor.dirty = false
+        val write = { thumb: Bitmap? ->
             bg.execute {
                 val r = runCatching { store.save(m, editor.scene, thumb) }
                 ui {
-                    r.onSuccess { editor.dirty = false; if (feedback) status("Saved", 900) }.onFailure { showError(it) }
+                    r.onSuccess { if (feedback) status("Saved", 900) }.onFailure { editor.dirty = true; showError(it) }
                     after?.invoke()
                 }
             }
         }
+        if (withThumb) {
+            var done = false
+            val fallback = Runnable { if (!done) { done = true; write(null) } }
+            root.postDelayed(fallback, 1500)
+            viewport.capture(384, false) { thumb -> if (!done) { done = true; root.removeCallbacks(fallback); write(thumb) } }
+        } else write(null)
     }
 
     private fun saveCopy() {
@@ -634,10 +645,11 @@ class EditorActivity : BaseActivity() {
                 imageCallback = null
                 async({
                     val bytes = FileIO.read(this, uri, 64L * 1024 * 1024)
-                    val mime = contentResolver.getType(uri) ?: "image/png"
+                    val isPng = bytes.size > 8 && bytes[0] == 0x89.toByte() && bytes[1] == 'P'.code.toByte() && bytes[2] == 'N'.code.toByte()
+                    val isJpeg = bytes.size > 3 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte()
                     val name = FileIO.displayName(this, uri) ?: "Image"
-                    // re-encode exotic formats (HEIC etc.) as PNG so every glTF viewer can read them
-                    if (mime == "image/png" || mime == "image/jpeg") Texture(name, bytes, mime) else {
+                    // keep PNG/JPEG bytes as-is; re-encode anything else (HEIC, WebP, GIF…) as PNG for glTF viewers
+                    if (isPng) Texture(name, bytes, "image/png") else if (isJpeg) Texture(name, bytes, "image/jpeg") else {
                         val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: throw IllegalStateException("Unsupported image")
                         val out = java.io.ByteArrayOutputStream(); bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
                         Texture(name.substringBeforeLast('.') + ".png", out.toByteArray(), "image/png")
@@ -654,7 +666,7 @@ class EditorActivity : BaseActivity() {
         super.onPause()
         if (::viewport.isInitialized) {
             stopPlayback()
-            if (editor.dirty && Prefs.of(this).autosave) save(false)
+            if (editor.dirty && Prefs.of(this).autosave) save(false, withThumb = false)
             viewport.onPause()
         }
     }

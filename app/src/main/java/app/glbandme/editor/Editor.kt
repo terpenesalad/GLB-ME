@@ -81,7 +81,9 @@ class Editor(val scene: Scene) {
         }
         undo.onChanged = { notify(Change.UNDO) }
         if (scene.selected == null) scene.selected = scene.objects.firstOrNull()
-        if (scene.objects.isEmpty()) tool = Tool.TRANSFORM
+        // Sculpt straight away on a lone sculpt base; otherwise start safe with the transform tool
+        val only = scene.objects.singleOrNull()
+        tool = if (only != null && only.primitive == null && only.name.startsWith("Sculpt")) Tool.CLAY else Tool.TRANSFORM
     }
 
     fun addListener(l: (Set<Change>) -> Unit) { listeners.add(l) }

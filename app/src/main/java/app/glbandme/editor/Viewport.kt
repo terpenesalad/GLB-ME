@@ -63,7 +63,10 @@ class Viewport(ctx: Context, val ed: Editor, msaa: Boolean) : GLSurfaceView(ctx)
                     accent = Theme.accentRgb()
                     showMask = ed.showMask
                     outlineSelected = ed.tool == Tool.TRANSFORM || ed.tool == Tool.SELECT
-                    if (ed.tool == Tool.SELECT) { editWire = true; editSelection = ed.faces.version to ed.faces.list() }
+                    if (ed.tool == Tool.SELECT) {
+                        editWire = true
+                        if (ed.faces.mesh === ed.scene.selected?.mesh) editSelection = ed.faces.version to ed.faces.list()
+                    }
                 }
                 synchronized(ed.scene) {
                     renderer.render(ed.scene, glCam, width, height, opt)
@@ -360,7 +363,7 @@ class Viewport(ctx: Context, val ed: Editor, msaa: Boolean) : GLSurfaceView(ctx)
                     }
                     else -> {
                         val (ro, rd) = uiCam.ray(x, y)
-                        val hit = Picking.pick(ed.scene, ro, rd, o) ?: return
+                        val hit = Picking.pick(ed.scene, ro, rd, o, maxStaleMs = 50) ?: return
                         val target = hit.localPos
                         val last = lastLocal ?: target
                         if (ed.tool == Tool.SELECT) {

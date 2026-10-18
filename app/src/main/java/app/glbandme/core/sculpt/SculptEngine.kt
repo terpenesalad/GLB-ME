@@ -94,6 +94,10 @@ class SculptEngine {
 
     val active get() = mesh != null
 
+    private var cacheMesh: Mesh? = null
+    private var cacheTopo = -1
+    private var cacheGeom = -1
+
     fun begin(o: SceneObject, brush: BrushType, s: BrushSettings, localRadius: Float) {
         val m = o.mesh
         obj = o
@@ -102,18 +106,26 @@ class SculptEngine {
         settings.copyFrom(s)
         o.primitive = null // procedural shape becomes a sculpt
         val vc = m.vertexCount
-        val w = m.weld()
-        rep = w.rep; groupStart = w.groupStart; groupList = w.groupList
-        buildWeldedNeighbours(m)
+        // Reuse topology caches and the spatial grid when sculpting the same mesh again and
+        // nothing else moved its vertices since our last stroke (keeps stroke start instant).
+        val sameTopo = cacheMesh === m && cacheTopo == m.topologyVersion
+        if (!sameTopo) {
+            val w = m.weld()
+            rep = w.rep; groupStart = w.groupStart; groupList = w.groupList
+            buildWeldedNeighbours(m)
+            stamp = IntArray(vc)
+            tmpTarget = FloatArray(vc * 3)
+        }
         if (brush == BrushType.PAINT) m.ensureColors()
         if (brush == BrushType.MASK) m.ensureMask()
-        slot = IntArray(vc) { -1 }
+        if (slot.size != vc) slot = IntArray(vc) { -1 } else slot.fill(-1)
         undoIdx.clear()
         undoPos = FloatArray(1024 * 3); undoCol = FloatArray(1024 * 4); undoMask = FloatArray(1024); undoNormal = FloatArray(1024 * 3)
-        stamp = IntArray(vc)
-        tmpTarget = FloatArray(vc * 3)
         layerHeight = if (brush == BrushType.LAYER) FloatArray(vc) else FloatArray(0)
-        buildGrid(m, max(localRadius * 0.8f, 1e-5f))
+        val wantCell = max(localRadius * 0.8f, 1e-5f)
+        val gridValid = sameTopo && cacheGeom == m.geometryVersion && grid.isNotEmpty() && wantCell < cellSize * 3f && wantCell > cellSize / 3f
+        if (!gridValid) buildGrid(m, wantCell)
+        cacheMesh = m; cacheTopo = m.topologyVersion
         lastCenter = null
         grabCount = 0
     }
@@ -485,7 +497,7 @@ class SculptEngine {
         val m = mesh ?: return null
         val o = obj
         mesh = null; obj = null
-        grid.clear()
+        cacheGeom = m.geometryVersion
         val n = undoIdx.size
         if (n == 0) return null
         val idx = undoIdx.toArray()
@@ -503,7 +515,6 @@ class SculptEngine {
         }
         val label = type.label
         val bytes = n * (4L + 24 + (if (beforeC != null) 32 else 0) + (if (beforeM != null) 8 else 0))
-        slot = IntArray(0)
         return SculptUndo(label, o, m, m.topologyVersion, idx, beforeP, afterP, beforeC, afterC, beforeM, afterM, bytes)
     }
 
