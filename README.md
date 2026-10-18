@@ -1,9 +1,27 @@
 # GLB&ME
 
-**Create, sculpt, paint, animate and export 3D models (GLB / glTF) on Android.**
+**Create, sculpt, paint, animate and export 3D models (GLB / glTF) on Android and on your PC (Windows, macOS, Linux).**
 Inspired by the workflows of Nomad Sculpt, Prisma3D and Sculpt & Draw — with every "premium" feature unlocked, no account, fully offline.
 
-<p align="center"><b>⬇️ Download the APK from the <a href="../../releases/latest">latest release</a></b></p>
+<p align="center"><b>⬇️ Download from the <a href="../../releases/latest">latest release</a>:</b><br>
+Android → <code>GLB-ME-x.y.z.apk</code> · Windows → <code>GLB-ME-Setup-x.y.z.exe</code> (or the portable .exe) · macOS → <code>.dmg</code> · Linux → <code>.AppImage</code> / <code>.deb</code></p>
+
+## Desktop version
+
+The PC app (in [`desktop/`](desktop)) has the same toolset as the phone app, laid out for mouse and keyboard:
+layers on the left, inspector on the right, a tool strip on top and a timeline when animating.
+
+- **Projects move freely between phone and PC**: every project is a standard `.glb` with the editing data inside. Use *Save as GLB…* on one device and open or import it on the other.
+- **3D text with your PC's installed fonts**, 14 bundled open-licence fonts (including Michroma, a wide Horizon-style display face) or any `.ttf` / `.otf` / `.woff` you import.
+- Sculpt with a mouse or pen tablet (pressure supported), vertex paint, face selection with part materials, 18 seamless textures, photos, stickers, image planes, lights, keyframe animation with presets.
+- Export **GLB, glTF, USDZ, OBJ + MTL (zip), STL, PLY** with presets (Game ready, Web & AR, iPhone AR, 3D print, Other 3D apps), triangle budget, texture size, origin, units and up axis.
+- Drag & drop models, images and fonts onto the window; `.glb`/`.gltf` files can be opened with GLB&ME from Explorer/Finder.
+- Shortcuts: **1–5** modes · **W/E/R** move/rotate/scale · **F** frame · **Shift+A** add · **T** text · **Ctrl+Z / Ctrl+Shift+Z** · **Ctrl+S** save · **Ctrl+E** export · **[ ]** brush size · hold **Shift** to smooth, **Ctrl** to invert · **Tab** hide UI · **?** all shortcuts.
+
+> The installers are not code-signed yet. Windows SmartScreen may show *“Windows protected your PC”* → **More info → Run anyway**. On macOS, right-click the app → **Open** the first time.
+
+Build it yourself: `cd desktop && npm ci && npm run dist` (installers land in `desktop/release/`).
+
 
 ## Features
 

@@ -4,7 +4,9 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+    paths-ignore: ["desktop/**", ".github/workflows/desktop.yml"]
   pull_request:
+    paths-ignore: ["desktop/**"]
   workflow_dispatch:
 
 permissions:

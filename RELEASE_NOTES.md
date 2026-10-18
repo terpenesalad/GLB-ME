@@ -1,5 +1,11 @@
 ## GLB&ME 1.1.0 – the big redesign
 
+### New: GLB&ME for PC (Windows, macOS, Linux)
+- **Windows installer** (`GLB-ME-Setup-1.1.0.exe`) plus a portable `.exe`, a macOS `.dmg` and Linux `.AppImage` / `.deb`.
+- The full editor for mouse, keyboard and pen tablets: sculpting, painting, face editing, part materials, textures, stickers, 3D text, draw-to-3D, lights, animation and the pro export dialog.
+- **3D text with any font installed on your PC**, 14 bundled open fonts or your own font files.
+- Projects are plain `.glb` files with the editing data inside, so they move between your phone and your PC.
+
 ### A calmer, clearer editor
 - **Modes** at the bottom – Object, Sculpt, Paint, Edit and Animate. The strip above only shows the tools for the mode you're in.
 - **Panels slide up as sheets** and the camera shifts so your model stays visible above them. Drag the handle to resize, swipe down to close. On tablets and in landscape they dock to the side.
