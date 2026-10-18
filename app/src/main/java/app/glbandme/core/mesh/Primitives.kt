@@ -19,7 +19,21 @@ enum class PrimType(val label: String) {
     PLANE("Plane"),
     CAPSULE("Capsule"),
     TUBE("Tube"),
-    PYRAMID("Pyramid");
+    PYRAMID("Pyramid"),
+    ROUNDED_BOX("Rounded Box"),
+    DOME("Dome"),
+    PRISM("Prism"),
+    WEDGE("Wedge"),
+    OCTAHEDRON("Gem"),
+    STAR("Star"),
+    HEART("Heart"),
+    GEAR("Gear"),
+    ARROW("Arrow"),
+    SPRING("Spring"),
+    KNOT("Knot"),
+    STAIRS("Stairs"),
+    ARCH("Arch"),
+    TERRAIN("Terrain");
 }
 
 class ParamDef(val key: String, val label: String, val min: Float, val max: Float, val def: Float, val integer: Boolean = false)
@@ -74,6 +88,41 @@ object Primitives {
             ParamDef("height", "Height", 0.02f, 10f, 1f), ParamDef("segments", "Segments", 3f, 128f, 48f, true)
         )
         PrimType.PYRAMID -> listOf(ParamDef("base", "Base", 0.02f, 10f, 1f), ParamDef("height", "Height", 0.02f, 10f, 1f))
+        PrimType.ROUNDED_BOX -> listOf(
+            ParamDef("width", "Width", 0.02f, 10f, 1f), ParamDef("height", "Height", 0.02f, 10f, 1f), ParamDef("depth", "Depth", 0.02f, 10f, 1f),
+            ParamDef("radius", "Corner Radius", 0f, 2f, 0.15f), ParamDef("res", "Resolution", 2f, 64f, 16f, true)
+        )
+        PrimType.DOME -> listOf(ParamDef("radius", "Radius", 0.05f, 5f, 0.5f), ParamDef("segments", "Segments", 3f, 128f, 48f, true), ParamDef("rings", "Rings", 2f, 64f, 16f, true))
+        PrimType.PRISM -> listOf(ParamDef("radius", "Radius", 0.02f, 5f, 0.5f), ParamDef("height", "Height", 0.02f, 10f, 1f), ParamDef("sides", "Sides", 3f, 12f, 6f, true))
+        PrimType.WEDGE -> listOf(ParamDef("width", "Width", 0.02f, 10f, 1f), ParamDef("height", "Height", 0.02f, 10f, 0.6f), ParamDef("depth", "Depth", 0.02f, 10f, 1f))
+        PrimType.OCTAHEDRON -> listOf(ParamDef("radius", "Radius", 0.05f, 5f, 0.5f))
+        PrimType.STAR -> listOf(
+            ParamDef("points", "Points", 3f, 24f, 5f, true), ParamDef("radius", "Radius", 0.05f, 5f, 0.5f), ParamDef("inner", "Inner Ratio", 0.1f, 0.95f, 0.45f),
+            ParamDef("depth", "Thickness", 0.01f, 3f, 0.15f), ParamDef("bevel", "Bevel", 0f, 0.3f, 0.03f)
+        )
+        PrimType.HEART -> listOf(ParamDef("size", "Size", 0.1f, 5f, 1f), ParamDef("depth", "Thickness", 0.01f, 3f, 0.25f), ParamDef("bevel", "Bevel", 0f, 0.3f, 0.04f))
+        PrimType.GEAR -> listOf(
+            ParamDef("teeth", "Teeth", 4f, 64f, 14f, true), ParamDef("radius", "Radius", 0.05f, 5f, 0.5f), ParamDef("tooth", "Tooth Depth", 0.01f, 1f, 0.08f),
+            ParamDef("depth", "Thickness", 0.01f, 3f, 0.15f), ParamDef("hole", "Hole Radius", 0f, 2f, 0.12f), ParamDef("bevel", "Bevel", 0f, 0.1f, 0.01f)
+        )
+        PrimType.ARROW -> listOf(ParamDef("length", "Length", 0.1f, 10f, 1.2f), ParamDef("width", "Width", 0.05f, 5f, 0.6f), ParamDef("depth", "Thickness", 0.01f, 2f, 0.12f), ParamDef("bevel", "Bevel", 0f, 0.1f, 0.02f))
+        PrimType.SPRING -> listOf(
+            ParamDef("radius", "Radius", 0.05f, 5f, 0.35f), ParamDef("wire", "Wire", 0.005f, 0.5f, 0.05f), ParamDef("turns", "Turns", 1f, 30f, 6f),
+            ParamDef("height", "Height", 0.05f, 10f, 1f), ParamDef("sides", "Sides", 3f, 32f, 12f, true)
+        )
+        PrimType.KNOT -> listOf(
+            ParamDef("p", "Winds (p)", 1f, 9f, 2f, true), ParamDef("q", "Loops (q)", 1f, 9f, 3f, true),
+            ParamDef("radius", "Radius", 0.1f, 5f, 0.5f), ParamDef("tube", "Tube", 0.01f, 0.5f, 0.07f), ParamDef("sides", "Sides", 3f, 32f, 12f, true)
+        )
+        PrimType.STAIRS -> listOf(ParamDef("steps", "Steps", 1f, 40f, 6f, true), ParamDef("width", "Width", 0.1f, 10f, 1f), ParamDef("rise", "Step Height", 0.02f, 1f, 0.15f), ParamDef("run", "Step Depth", 0.02f, 1f, 0.25f))
+        PrimType.ARCH -> listOf(
+            ParamDef("width", "Width", 0.1f, 10f, 1.2f), ParamDef("height", "Height", 0.1f, 10f, 1.4f), ParamDef("opening", "Opening", 0.05f, 9f, 0.7f),
+            ParamDef("depth", "Depth", 0.02f, 5f, 0.3f), ParamDef("segments", "Smoothness", 4f, 64f, 24f, true)
+        )
+        PrimType.TERRAIN -> listOf(
+            ParamDef("size", "Size", 0.5f, 50f, 4f), ParamDef("height", "Height", 0f, 10f, 0.8f), ParamDef("rough", "Roughness", 0f, 1f, 0.5f),
+            ParamDef("seed", "Seed", 1f, 999f, 7f, true), ParamDef("res", "Resolution", 8f, 256f, 96f, true)
+        )
     }
 
     fun build(spec: PrimitiveSpec): Mesh = when (spec.type) {
@@ -88,6 +137,20 @@ object Primitives {
         PrimType.CAPSULE -> capsule(spec["radius"], spec["height"], spec.int("segments"), spec.int("rings"))
         PrimType.TUBE -> tube(spec["outer"], spec["inner"].coerceAtMost(spec["outer"] * 0.98f), spec["height"], spec.int("segments"))
         PrimType.PYRAMID -> MeshOps.flatShaded(cylinder(spec["base"] * 0.7071f, 0f, spec["height"], 4, 1, rotate = 45f))
+        PrimType.ROUNDED_BOX -> Shapes.roundedBox(spec["width"], spec["height"], spec["depth"], spec["radius"], spec.int("res"))
+        PrimType.DOME -> Shapes.dome(spec["radius"], spec.int("segments"), spec.int("rings"))
+        PrimType.PRISM -> Shapes.prism(spec["radius"], spec["height"], spec.int("sides"))
+        PrimType.WEDGE -> Shapes.wedge(spec["width"], spec["height"], spec["depth"])
+        PrimType.OCTAHEDRON -> Shapes.octahedron(spec["radius"])
+        PrimType.STAR -> Shapes.star(spec.int("points"), spec["radius"], spec["inner"], spec["depth"], spec["bevel"])
+        PrimType.HEART -> Shapes.heart(spec["size"], spec["depth"], spec["bevel"])
+        PrimType.GEAR -> Shapes.gear(spec.int("teeth"), spec["radius"], spec["tooth"], spec["depth"], spec["hole"].coerceAtMost(spec["radius"] - spec["tooth"] - 0.01f), spec["bevel"])
+        PrimType.ARROW -> Shapes.arrow(spec["length"], spec["width"], spec["depth"], spec["bevel"])
+        PrimType.SPRING -> Shapes.spring(spec["radius"], spec["wire"], spec["turns"], spec["height"], spec.int("sides"))
+        PrimType.KNOT -> Shapes.knot(spec.int("p"), spec.int("q"), spec["radius"], spec["tube"], spec.int("sides"))
+        PrimType.STAIRS -> Shapes.stairs(spec.int("steps"), spec["width"], spec["rise"], spec["run"])
+        PrimType.ARCH -> Shapes.arch(spec["width"], spec["height"], spec["opening"], spec["depth"], spec.int("segments"))
+        PrimType.TERRAIN -> Shapes.terrain(spec["size"], spec["height"], spec["rough"], spec.int("seed"), spec.int("res"))
     }
 
     // -------------------------------------------------------------------------------------------

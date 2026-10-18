@@ -11,6 +11,7 @@ import android.widget.ScrollView
 import app.glbandme.core.templates.Template
 import app.glbandme.core.templates.Templates
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 import java.io.File
 
 /** Gallery of procedural starter scenes. */

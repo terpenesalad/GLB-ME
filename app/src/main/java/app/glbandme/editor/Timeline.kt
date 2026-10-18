@@ -16,6 +16,7 @@ import app.glbandme.ui.Icon
 import app.glbandme.ui.IconButton
 import app.glbandme.ui.Theme
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 import app.glbandme.ui.label
 import kotlin.math.roundToInt
 
@@ -89,7 +90,7 @@ class Timeline(private val act: EditorActivity, private val ed: Editor) : Linear
             // ticks
             val n = s.frameCount.coerceAtLeast(1)
             val step = when { n <= 60 -> 5; n <= 180 -> 10; n <= 600 -> 30; else -> 60 }
-            p.textSize = dp(9f); p.textAlign = Paint.Align.CENTER
+            p.textSize = sp(9f); p.textAlign = Paint.Align.CENTER
             var f = 0
             while (f <= n) {
                 val x = xOf(f.toFloat())

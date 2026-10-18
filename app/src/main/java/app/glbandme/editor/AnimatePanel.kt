@@ -9,6 +9,7 @@ import app.glbandme.ui.MenuItem
 import app.glbandme.ui.Segmented
 import app.glbandme.ui.Theme
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 import app.glbandme.ui.ToggleRow
 import app.glbandme.ui.label
 import app.glbandme.ui.lp

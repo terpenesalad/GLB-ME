@@ -19,6 +19,7 @@ import app.glbandme.ui.Prefs
 import app.glbandme.ui.PressableView
 import app.glbandme.ui.Theme
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 import app.glbandme.ui.ToggleRow
 import app.glbandme.ui.hbox
 import app.glbandme.ui.label
@@ -94,12 +95,12 @@ object ExportSheet {
             r.set(dp(10f), dp(11f), dp(62f), h - dp(11f))
             p.color = if (active) Theme.accent else Theme.SURFACE_3
             c.drawRoundRect(r, dp(9f), dp(9f), p)
-            tp.typeface = Theme.bold; tp.textSize = dp(12.5f); tp.color = 0xFFFFFFFF.toInt(); tp.textAlign = Paint.Align.CENTER
+            tp.typeface = Theme.bold; tp.textSize = sp(12.5f); tp.color = 0xFFFFFFFF.toInt(); tp.textAlign = Paint.Align.CENTER
             c.drawText(".${format.ext}", r.centerX(), r.centerY() + dp(4.5f), tp)
             tp.textAlign = Paint.Align.LEFT
-            tp.typeface = Theme.medium; tp.textSize = dp(14.5f); tp.color = Theme.TEXT
+            tp.typeface = Theme.medium; tp.textSize = sp(14.5f); tp.color = Theme.TEXT
             c.drawText(format.label, dp(74f), h / 2 - dp(3f), tp)
-            tp.typeface = Theme.regular; tp.textSize = dp(11.5f); tp.color = Theme.TEXT_MUTED
+            tp.typeface = Theme.regular; tp.textSize = sp(11.5f); tp.color = Theme.TEXT_MUTED
             c.drawText(TextUtils.ellipsize(format.description, tp, w - dp(86f), TextUtils.TruncateAt.END).toString(), dp(74f), h / 2 + dp(14f), tp)
         }
     }

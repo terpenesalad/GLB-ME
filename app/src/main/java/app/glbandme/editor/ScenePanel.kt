@@ -24,6 +24,7 @@ import app.glbandme.ui.MenuItem
 import app.glbandme.ui.PressableView
 import app.glbandme.ui.Theme
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 import app.glbandme.ui.label
 import app.glbandme.ui.lp
 import app.glbandme.ui.sectionTitle
@@ -157,11 +158,11 @@ class ObjectRow(ctx: Context, val o: SceneObject, private val selected: Boolean)
         val icon = when { o.primitive != null -> Icon.SHAPES; o.keys.isNotEmpty() -> Icon.ANIMATE; else -> Icon.CUBE }
         Icons.draw(c, icon, dp(42f), h / 2, dp(17f), Theme.TEXT_DIM)
         tp.color = if (o.visible) Theme.TEXT else Theme.TEXT_MUTED
-        tp.textSize = dp(14f); tp.typeface = if (selected) Theme.medium else Theme.regular
+        tp.textSize = sp(14f); tp.typeface = if (selected) Theme.medium else Theme.regular
         val count = Fmt.count(o.mesh.triangleCount)
         val tw = w - dp(58f) - dp(100f)
         c.drawText(TextUtils.ellipsize(o.name, tp, tw, TextUtils.TruncateAt.END).toString(), dp(58f), h / 2 + dp(5f), tp)
-        tp.textSize = dp(11f); tp.color = Theme.TEXT_MUTED; tp.typeface = Theme.regular
+        tp.textSize = sp(11f); tp.color = Theme.TEXT_MUTED; tp.typeface = Theme.regular
         tp.textAlign = Paint.Align.RIGHT
         c.drawText(count, w - dp(48f), h / 2 + dp(4f), tp)
         tp.textAlign = Paint.Align.LEFT

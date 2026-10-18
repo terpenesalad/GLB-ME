@@ -16,6 +16,7 @@ import android.text.TextPaint
 import android.text.TextUtils
 import android.view.View
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 
 /** App logo: gradient rounded square with an isometric cube. */
 class LogoView(ctx: Context, private val sizeDp: Int = 44) : View(ctx) {
@@ -56,9 +57,9 @@ class ActionTile(ctx: Context, val icon: Icon, val title: String, val subtitle: 
         c.drawRoundRect(r, dp(14f), dp(14f), p)
         p.shader = null
         Icons.draw(c, icon, r.centerX(), r.centerY(), dp(24f), Color.WHITE, 2f)
-        tp.typeface = Theme.medium; tp.textSize = dp(15.5f); tp.color = Theme.TEXT
+        tp.typeface = Theme.medium; tp.textSize = sp(15.5f); tp.color = Theme.TEXT
         c.drawText(title, dp(14f), h - dp(34f), tp)
-        tp.typeface = Theme.regular; tp.textSize = dp(11.5f); tp.color = Theme.TEXT_DIM
+        tp.typeface = Theme.regular; tp.textSize = sp(11.5f); tp.color = Theme.TEXT_DIM
         c.drawText(TextUtils.ellipsize(subtitle, tp, w - dp(20f), TextUtils.TruncateAt.END).toString(), dp(14f), h - dp(15f), tp)
     }
 }
@@ -111,7 +112,7 @@ class ThumbCard(ctx: Context) : PressableView(ctx) {
         p.shader = null
         if (pressedNow) { p.color = 0x22FFFFFF; c.drawRoundRect(r, rad, rad, p) }
         badge?.let {
-            tp.textSize = dp(10.5f); tp.typeface = Theme.medium
+            tp.textSize = sp(10.5f); tp.typeface = Theme.medium
             val bw = tp.measureText(it) + dp(14f)
             r.set(w - dp(14f) - bw, dp(14f), w - dp(14f), dp(34f))
             p.color = 0xCC0E0F14.toInt()
@@ -119,9 +120,9 @@ class ThumbCard(ctx: Context) : PressableView(ctx) {
             tp.color = Color.WHITE
             c.drawText(it, r.left + dp(7f), r.bottom - dp(6.5f), tp)
         }
-        tp.typeface = Theme.medium; tp.textSize = dp(14.5f); tp.color = Theme.TEXT
+        tp.typeface = Theme.medium; tp.textSize = sp(14.5f); tp.color = Theme.TEXT
         c.drawText(TextUtils.ellipsize(title, tp, w - dp(24f), TextUtils.TruncateAt.END).toString(), dp(12f), th + dp(24f), tp)
-        tp.typeface = Theme.regular; tp.textSize = dp(11.5f); tp.color = Theme.TEXT_MUTED
+        tp.typeface = Theme.regular; tp.textSize = sp(11.5f); tp.color = Theme.TEXT_MUTED
         c.drawText(TextUtils.ellipsize(subtitle, tp, w - dp(24f), TextUtils.TruncateAt.END).toString(), dp(12f), th + dp(44f), tp)
     }
 }

@@ -12,6 +12,7 @@ import app.glbandme.ui.MenuItem
 import app.glbandme.ui.PillButton
 import app.glbandme.ui.Theme
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 import app.glbandme.ui.hbox
 import app.glbandme.ui.label
 import app.glbandme.ui.lp

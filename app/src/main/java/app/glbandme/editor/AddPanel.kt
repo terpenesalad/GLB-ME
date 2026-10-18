@@ -26,6 +26,7 @@ import app.glbandme.ui.SceneFactory
 import app.glbandme.ui.Segmented
 import app.glbandme.ui.Theme
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 import app.glbandme.ui.label
 import app.glbandme.ui.lp
 import app.glbandme.ui.sectionTitle

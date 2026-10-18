@@ -17,6 +17,7 @@ import app.glbandme.ui.IconButton
 import app.glbandme.ui.PillButton
 import app.glbandme.ui.Theme
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 import app.glbandme.ui.haptic
 import app.glbandme.ui.hbox
 import app.glbandme.ui.label
@@ -60,7 +61,7 @@ class NumberField(ctx: Context, private val axisColor: Int, value: Float, privat
         p.color = axisColor
         r.set(0f, dp(8f), dp(3f), h - dp(8f))
         c.drawRoundRect(r, dp(1.5f), dp(1.5f), p)
-        p.color = Theme.TEXT; p.textSize = dp(13f); p.typeface = Theme.mono; p.textAlign = Paint.Align.CENTER
+        p.color = Theme.TEXT; p.textSize = sp(13f); p.typeface = Theme.mono; p.textAlign = Paint.Align.CENTER
         c.drawText(String.format(fmt, value), w / 2, h / 2 + dp(4.5f), p)
     }
 

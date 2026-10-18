@@ -39,6 +39,7 @@ import app.glbandme.editor.Timeline
 import app.glbandme.editor.Tool
 import app.glbandme.editor.Viewport
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 import kotlin.math.roundToInt
 
 /** The modeling / sculpting workspace. */

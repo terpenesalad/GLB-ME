@@ -18,6 +18,7 @@ import app.glbandme.data.ProjectMeta
 import app.glbandme.data.ProjectStore
 import app.glbandme.data.ShareProvider
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 
 /** Launcher: project library, create/templates/import. */
 class HomeActivity : BaseActivity() {

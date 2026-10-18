@@ -29,6 +29,7 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 
 class MenuItem(val icon: Icon?, val text: String, val danger: Boolean = false, val subtitle: String? = null, val action: () -> Unit)
 
@@ -62,9 +63,14 @@ object Dialogs {
         return d
     }
 
-    private fun titleView(ctx: Context, title: String, message: String?): View = ctx.vbox().apply {
-        addView(ctx.label(title, 19f, Theme.TEXT, bold = true))
-        if (message != null) addView(ctx.label(message, 14f, Theme.TEXT_DIM).apply { setPadding(0, dp(8), 0, 0); setLineSpacing(0f, 1.15f) })
+    private fun titleView(ctx: Context, title: String, message: String?, center: Boolean = false): View = ctx.vbox().apply {
+        addView(ctx.label(title, 18f, Theme.TEXT, bold = true).apply { if (center) gravity = Gravity.CENTER_HORIZONTAL; if (android.os.Build.VERSION.SDK_INT >= 28) isAccessibilityHeading = true }, lp())
+        if (message != null) addView(ctx.label(message, 14.5f, Theme.TEXT_DIM).apply { setPadding(0, dp(8), 0, 0); setLineSpacing(0f, 1.2f); if (center) gravity = Gravity.CENTER_HORIZONTAL }, lp())
+    }
+
+    /** Equal-width button row (Apple alert style). */
+    private fun buttonRow(act: Activity, buttons: List<PillButton>): LinearLayout = act.hbox(0, 10).apply {
+        for (b in buttons) addView(b, lp(0, WRAP, 1f))
     }
 
     fun custom(
@@ -75,23 +81,22 @@ object Dialogs {
         lateinit var d: Dialog
         if (title != null) root.addView(titleView(act, title, null), lp())
         if (body != null) {
-            val wrap: View = if (scroll) ScrollView(act).apply { isVerticalScrollBarEnabled = false; addView(body) } else body
-            root.addView(wrap, lp().apply { topMargin = if (title != null) dp(12) else 0 })
+            val wrap: View = if (scroll) ScrollView(act).apply { isVerticalScrollBarEnabled = false; addView(body, FrameLayout.LayoutParams(MATCH, WRAP)) } else body
+            root.addView(wrap, lp().apply { topMargin = if (title != null) dp(14) else 0 })
             if (scroll) {
                 val maxH = (act.resources.displayMetrics.heightPixels * 0.62f).toInt()
-                wrap.layoutParams = lp().apply { topMargin = if (title != null) dp(12) else 0 }
                 (wrap as ScrollView).viewTreeObserver.addOnGlobalLayoutListener {
                     if (wrap.height > maxH) wrap.layoutParams = wrap.layoutParams.apply { height = maxH }
                 }
             }
         }
         if (positive != null || negative != null) {
-            val row = act.hbox(0, 10).apply { gravity = Gravity.END }
-            if (negative != null) row.addView(PillButton(act, negative, style = PillButton.Style.GHOST).apply { onClick = { onNegative?.invoke(); d.dismiss() } })
-            if (positive != null) row.addView(PillButton(act, positive, style = if (danger) PillButton.Style.DANGER else PillButton.Style.PRIMARY).apply {
+            val btns = ArrayList<PillButton>()
+            if (negative != null) btns.add(PillButton(act, negative, style = PillButton.Style.SECONDARY).apply { onClick = { onNegative?.invoke(); d.dismiss() } })
+            if (positive != null) btns.add(PillButton(act, positive, style = if (danger) PillButton.Style.DANGER else PillButton.Style.PRIMARY).apply {
                 onClick = { if (onPositive?.invoke() != false) d.dismiss() }
             })
-            root.addView(row, lp().apply { topMargin = dp(18) })
+            root.addView(buttonRow(act, btns), lp().apply { topMargin = dp(20) })
         }
         d = base(act, root)
         d.show()
@@ -99,14 +104,42 @@ object Dialogs {
     }
 
     fun confirm(act: Activity, title: String, message: String, confirm: String = "OK", danger: Boolean = false, onConfirm: () -> Unit): Dialog {
-        val root = act.vbox(20)
-        root.addView(titleView(act, title, message))
+        val root = act.vbox(22)
+        root.addView(titleView(act, title, message, center = true), lp())
         lateinit var d: Dialog
-        val row = act.hbox(0, 10).apply { gravity = Gravity.END }
-        row.addView(PillButton(act, "Cancel", style = PillButton.Style.GHOST).apply { onClick = { d.dismiss() } })
-        row.addView(PillButton(act, confirm, style = if (danger) PillButton.Style.DANGER else PillButton.Style.PRIMARY).apply { onClick = { d.dismiss(); onConfirm() } })
-        root.addView(row, lp().apply { topMargin = dp(20) })
+        val row = buttonRow(act, listOf(
+            PillButton(act, "Cancel", style = PillButton.Style.SECONDARY).apply { onClick = { d.dismiss() } },
+            PillButton(act, confirm, style = if (danger) PillButton.Style.DANGER else PillButton.Style.PRIMARY).apply { onClick = { d.dismiss(); onConfirm() } }
+        ))
+        root.addView(row, lp().apply { topMargin = dp(22) })
         d = base(act, root)
+        d.show()
+        return d
+    }
+
+    /**
+     * Bottom sheet with an iOS-style header: Cancel · Title · Action.
+     * [body] is placed in a scroll view; returns the dialog.
+     */
+    fun sheet(act: Activity, title: String, body: View, action: String? = "Done", tall: Boolean = false, onAction: (() -> Boolean)? = null, onCancel: (() -> Unit)? = null): Dialog {
+        lateinit var d: Dialog
+        val root = act.vbox()
+        root.addView(View(act).apply { background = Theme.rounded(Theme.SURFACE_3, 3f); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO },
+            LinearLayout.LayoutParams(dp(38), dp(5)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(8) })
+        val head = FrameLayout(act).apply { setPadding(dp(8), dp(4), dp(8), dp(4)) }
+        head.addView(PillButton(act, "Cancel", style = PillButton.Style.GHOST).apply { onClick = { onCancel?.invoke(); d.dismiss() } }, flp(WRAP, WRAP, Gravity.START or Gravity.CENTER_VERTICAL))
+        head.addView(act.label(title, 17f, Theme.TEXT, bold = true).apply { gravity = Gravity.CENTER; if (android.os.Build.VERSION.SDK_INT >= 28) isAccessibilityHeading = true }, flp(WRAP, WRAP, Gravity.CENTER))
+        if (action != null) head.addView(PillButton(act, action, style = PillButton.Style.GHOST).apply { onClick = { if (onAction?.invoke() != false) d.dismiss() } }, flp(WRAP, WRAP, Gravity.END or Gravity.CENTER_VERTICAL))
+        root.addView(head, lp())
+        val scroll = ScrollView(act).apply { isVerticalScrollBarEnabled = false; setPadding(dp(16), dp(4), dp(16), dp(24)); clipToPadding = false }
+        scroll.addView(body, FrameLayout.LayoutParams(MATCH, WRAP))
+        val dm = act.resources.displayMetrics
+        root.addView(scroll, lp(MATCH, if (tall) (dm.heightPixels * 0.86f).toInt() else WRAP))
+        if (!tall) scroll.viewTreeObserver.addOnGlobalLayoutListener {
+            val maxH = (dm.heightPixels * 0.8f).toInt()
+            if (scroll.height > maxH) scroll.layoutParams = scroll.layoutParams.apply { height = maxH }
+        }
+        d = base(act, root, bottom = true)
         d.show()
         return d
     }
@@ -120,9 +153,9 @@ object Dialogs {
         this.hint = hint
         setTextColor(Theme.TEXT)
         setHintTextColor(Theme.TEXT_MUTED)
-        textSize = 16f
-        background = Theme.rounded(Theme.SURFACE_2, 12f, Theme.STROKE, 1f)
-        setPadding(dp(14), dp(12), dp(14), dp(12))
+        textSize = 17f * Theme.uiScale
+        background = Theme.rounded(Theme.SURFACE_2, 12f)
+        setPadding(dp(14), dp(13), dp(14), dp(13))
         isSingleLine = true
         imeOptions = EditorInfo.IME_ACTION_DONE
         setSelection(text.length)
@@ -148,19 +181,24 @@ object Dialogs {
         et.postDelayed({ (act.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(et, 0) }, 150)
     }
 
-    /** Bottom sheet list menu. */
+    /** Action sheet: grouped rows plus a separate Cancel button (iOS style). */
     fun menu(act: Activity, title: String?, items: List<MenuItem>): Dialog {
-        val root = act.vbox().apply { setPadding(dp(10), dp(14), dp(10), dp(18)) }
+        val root = act.vbox().apply { setPadding(dp(12), dp(10), dp(12), dp(14)) }
         lateinit var d: Dialog
-        // grab handle
-        root.addView(View(act).apply { background = Theme.rounded(Theme.SURFACE_3, 3f) }, LinearLayout.LayoutParams(dp(40), dp(5)).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dp(10) })
-        if (title != null) root.addView(act.label(title, 15f, Theme.TEXT_DIM, bold = true).apply { setPadding(dp(14), dp(4), dp(14), dp(10)) })
+        root.addView(View(act).apply { background = Theme.rounded(Theme.SURFACE_3, 3f); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO },
+            LinearLayout.LayoutParams(dp(38), dp(5)).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dp(10) })
+        if (title != null) root.addView(act.label(title, 13.5f, Theme.TEXT_MUTED, bold = true).apply {
+            gravity = Gravity.CENTER; setPadding(dp(14), dp(2), dp(14), dp(10)); maxLines = 2
+        }, lp())
+        val card = GroupCard(act)
         for (it in items) {
             val row = MenuRow(act, it)
             row.onClick = { d.dismiss(); it.action() }
-            root.addView(row, lp())
+            card.row(row)
         }
-        val scroll = ScrollView(act).apply { addView(root) }
+        root.addView(card, lp())
+        root.addView(PillButton(act, "Cancel", style = PillButton.Style.SECONDARY).apply { onClick = { d.dismiss() } }, lp().apply { topMargin = dp(10) })
+        val scroll = ScrollView(act).apply { isVerticalScrollBarEnabled = false; addView(root, FrameLayout.LayoutParams(MATCH, WRAP)) }
         d = base(act, scroll, bottom = true)
         d.show()
         return d
@@ -181,21 +219,26 @@ object Dialogs {
 }
 
 class MenuRow(ctx: Context, val item: MenuItem) : PressableView(ctx) {
-    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val p = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG)
     private val r = RectF()
-    override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(resolveSize(dp(300), w), dp(if (item.subtitle != null) 60 else 52))
+    init { describe(if (item.subtitle != null) "${item.text}. ${item.subtitle}" else item.text) }
+    override fun onMeasure(w: Int, h: Int) {
+        val hh = if (item.subtitle != null) sp(15f) + sp(12f) + dp(26f) else sp(15f) + dp(32f)
+        setMeasuredDimension(resolveSize(dp(300), w), kotlin.math.max(dp(if (item.subtitle != null) 58 else 50), hh.toInt()))
+    }
     override fun onDraw(c: Canvas) {
         val w = width.toFloat(); val h = height.toFloat()
-        if (pressedNow) { p.color = 0x18FFFFFF; r.set(0f, 0f, w, h); c.drawRoundRect(r, dp(12f), dp(12f), p) }
+        if (pressedNow) { p.color = 0x18FFFFFF; r.set(-dp(14f), 0f, w + dp(14f), h); c.drawRect(r, p) }
         val col = if (item.danger) Theme.DANGER else Theme.TEXT
-        var x = dp(16f)
-        item.icon?.let { Icons.draw(c, it, x + dp(11f), h / 2, dp(22f), if (item.danger) Theme.DANGER else Theme.TEXT_DIM); x += dp(38f) }
-        p.color = col; p.textSize = dp(15f); p.typeface = Theme.regular
+        var x = dp(2f)
+        item.icon?.let { Icons.draw(c, it, x + dp(12f), h / 2, dp(22f), if (item.danger) Theme.DANGER else Theme.accentLight()); x += dp(40f) }
+        p.color = col; p.textSize = sp(15.5f); p.typeface = Theme.regular
+        val tw = w - x - dp(4f)
         if (item.subtitle != null) {
-            c.drawText(item.text, x, h / 2 - dp(2f), p)
-            p.color = Theme.TEXT_MUTED; p.textSize = dp(12f)
-            c.drawText(item.subtitle, x, h / 2 + dp(15f), p)
-        } else c.drawText(item.text, x, h / 2 + dp(5.5f), p)
+            c.drawText(android.text.TextUtils.ellipsize(item.text, p, tw, android.text.TextUtils.TruncateAt.END).toString(), x, h / 2 - dp(3f), p)
+            p.color = Theme.TEXT_MUTED; p.textSize = sp(12.5f)
+            c.drawText(android.text.TextUtils.ellipsize(item.subtitle, p, tw, android.text.TextUtils.TruncateAt.END).toString(), x, h / 2 + sp(12.5f) + dp(1f), p)
+        } else c.drawText(android.text.TextUtils.ellipsize(item.text, p, tw, android.text.TextUtils.TruncateAt.END).toString(), x, h / 2 + sp(15.5f) * 0.35f, p)
     }
 }
 
@@ -204,7 +247,7 @@ object Snack {
     fun show(host: ViewGroup, text: String, long: Boolean = false) {
         val ctx = host.context
         val tv = ctx.label(text, 14f, Theme.TEXT).apply {
-            background = Theme.rounded(0xF0242836.toInt(), 14f, Theme.STROKE, 1f)
+            background = Theme.rounded(0xF22C2C30.toInt(), 16f)
             setPadding(dp(16), dp(12), dp(16), dp(12))
             gravity = Gravity.CENTER
             elevation = dp(8f)

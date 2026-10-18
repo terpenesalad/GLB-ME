@@ -59,13 +59,38 @@ class CoreTests {
         }
     }
 
+    private fun volume(m: Mesh): Float {
+        var v = 0.0
+        val p = m.positions
+        for (t in 0 until m.triangleCount) {
+            val a = Vec3.of(p, m.indices[t * 3] * 3); val b = Vec3.of(p, m.indices[t * 3 + 1] * 3); val c = Vec3.of(p, m.indices[t * 3 + 2] * 3)
+            v += a.dot(b.cross(c)) / 6.0
+        }
+        return v.toFloat()
+    }
+
     @Test fun primitivesAreValidAndOutward() {
+        val convex = setOf(PrimType.SPHERE, PrimType.SCULPT_SPHERE, PrimType.ICOSPHERE, PrimType.CUBE, PrimType.CYLINDER, PrimType.CONE,
+            PrimType.CAPSULE, PrimType.PYRAMID, PrimType.ROUNDED_BOX, PrimType.PRISM, PrimType.OCTAHEDRON)
         for (t in PrimType.values()) {
             val m = PrimitiveSpec(t).build()
             assertValid(m)
             assertTrue("$t has triangles", m.triangleCount > 0)
-            if (t != PrimType.PLANE && t != PrimType.TUBE && t != PrimType.TORUS) assertOutward(m)
+            if (t in convex) assertOutward(m)
+            // every closed solid must enclose positive volume (consistent, outward winding)
+            if (t != PrimType.PLANE && t != PrimType.TERRAIN) assertTrue("$t volume ${volume(m)}", volume(m) > 1e-4f)
         }
+    }
+
+    @Test fun bevelledExtrusionIsClosedAndBigger() {
+        val sq = floatArrayOf(-0.5f, -0.5f, 0.5f, -0.5f, 0.5f, 0.5f, -0.5f, 0.5f)
+        val hole = floatArrayOf(-0.2f, -0.2f, -0.2f, 0.2f, 0.2f, 0.2f, 0.2f, -0.2f)
+        val flat = app.glbandme.core.mesh.Extruder.extrude(listOf(sq, hole), 0.2f, 0f)!!
+        assertEquals((1f - 0.16f) * 0.2f, volume(flat), 1e-3f)
+        val bev = app.glbandme.core.mesh.Extruder.extrude(listOf(sq, hole), 0.2f, 0.04f, 3)!!
+        assertValid(bev)
+        val v = volume(bev)
+        assertTrue("bevel volume $v", v > 0.12f && v < 0.168f)
     }
 
     @Test fun cubeKeepsHardEdgesButSphereSeamsAreSmooth() {

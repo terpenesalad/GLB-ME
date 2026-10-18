@@ -3,6 +3,7 @@ package app.glbandme.ui
 import android.app.Activity
 import android.view.Gravity
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 
 object HelpSheet {
     private val gestures = listOf(

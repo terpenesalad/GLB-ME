@@ -8,6 +8,7 @@ import android.widget.ScrollView
 import app.glbandme.BuildConfigInfo
 import app.glbandme.core.io.ExportFormat
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 
 class SettingsActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

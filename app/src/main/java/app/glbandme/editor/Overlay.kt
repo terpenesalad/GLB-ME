@@ -12,6 +12,7 @@ import app.glbandme.ui.Fmt
 import app.glbandme.ui.Prefs
 import app.glbandme.ui.Theme
 import app.glbandme.ui.Theme.dp
+import app.glbandme.ui.Theme.sp
 import kotlin.math.hypot
 
 /** 2D overlay on top of the viewport: gizmo, axis navigator, brush cursor, stats. */
@@ -93,7 +94,7 @@ class Overlay(ctx: Context, private val vp: Viewport) : View(ctx) {
                 if (o != null) sb.append("   ·   ").append(o.name).append(" ").append(Fmt.count(o.mesh.triangleCount))
             }
             if (prefs.showFps) { if (sb.isNotEmpty()) sb.append("   ·   "); sb.append(vp.fps.toInt()).append(" fps") }
-            tp.textAlign = Paint.Align.LEFT; tp.textSize = dp(11f); tp.typeface = Theme.medium
+            tp.textAlign = Paint.Align.LEFT; tp.textSize = sp(11f); tp.typeface = Theme.medium
             tp.color = 0x99000000.toInt()
             c.drawText(sb.toString(), statsX + dp(1f), statsY + dp(1f), tp)
             tp.color = 0xCCECEEF6.toInt()
@@ -115,7 +116,7 @@ class Overlay(ctx: Context, private val vp: Viewport) : View(ctx) {
                 c.drawLine(navCx, navCy, b[0], b[1], p)
                 p.style = Paint.Style.FILL
                 c.drawCircle(b[0], b[1], dp(10f), p)
-                tp.color = Color.BLACK; tp.textSize = dp(11f)
+                tp.color = Color.BLACK; tp.textSize = sp(11f)
                 c.drawText(axisNames[i], b[0], b[1] + dp(4f), tp)
             } else {
                 p.style = Paint.Style.FILL
@@ -162,7 +163,7 @@ class Overlay(ctx: Context, private val vp: Viewport) : View(ctx) {
                         val s = dp(7f)
                         c.drawRect(ex - s, ey - s, ex + s, ey + s, p)
                     }
-                    tp.color = col; tp.textSize = dp(10.5f)
+                    tp.color = col; tp.textSize = sp(10.5f)
                     if (len > dp(20f)) c.drawText(axisNames[i], ex + ux * dp(22f), ey + uy * dp(22f) + dp(4f), tp)
                     p.alpha = 255
                 }
