@@ -119,6 +119,7 @@ class Prefs private constructor(private val sp: SharedPreferences) {
     var defaultExport: String get() = sp.getString("defaultExport", "GLB") ?: "GLB"; set(v) = sp.edit().putString("defaultExport", v).apply()
     var haptics: Boolean get() = b("haptics", true); set(v) = setB("haptics", v)
     var stylusOnly: Boolean get() = b("stylusOnly", false); set(v) = setB("stylusOnly", v)
+    var exportPreset: Int get() = sp.getInt("exportPreset", 0); set(v) = sp.edit().putInt("exportPreset", v).apply()
     var sortMode: Int get() = sp.getInt("sortMode", 0); set(v) = sp.edit().putInt("sortMode", v).apply()
     var seenTips: Boolean get() = b("seenTips", false); set(v) = setB("seenTips", v)
     var seenWelcome: Boolean get() = b("seenWelcome", false); set(v) = setB("seenWelcome", v)

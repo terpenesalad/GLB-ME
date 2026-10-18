@@ -25,6 +25,11 @@ class GltfExportOptions(
     var textures: Boolean = true,
     /** Optional re-encoder (resize / format change) applied once per image on export. */
     var textureFilter: ((Texture) -> Pair<ByteArray, String>)? = null,
+    /** Explicit object list (export pipeline); null = filter the scene with the flags above. */
+    var objects: List<SceneObject>? = null,
+    /** Column-major matrix applied above all objects (units / centring). Wrapped in a root node. */
+    var rootTransform: FloatArray? = null,
+    var rootName: String = "Root",
 )
 
 /** glTF 2.0 writer (.glb or .gltf with embedded buffers). */
@@ -37,9 +42,9 @@ object GltfWriter {
     private const val ELEMENT_ARRAY_BUFFER = 34963
 
     fun write(scene: Scene, opt: GltfExportOptions, editorExtras: Map<String, Any?>? = null): ByteArray {
-        val objects = scene.objects.filter { o ->
-            (opt.includeHidden || opt.projectData || o.visible) && (!opt.onlySelected || o === scene.selected) && o.mesh.triangleCount > 0
-        }
+        val objects = (opt.objects ?: scene.objects.filter { o ->
+            (opt.includeHidden || opt.projectData || o.visible) && (!opt.onlySelected || o === scene.selected)
+        }).filter { it.mesh.triangleCount > 0 }
         val w = Builder(opt)
         val nodeIds = ArrayList<Int>()
         val nodeOf = HashMap<SceneObject, Int>()
@@ -74,6 +79,16 @@ object GltfWriter {
         sceneObj["name"] = "Scene"
         sceneObj["nodes"] = nodeIds
         if (editorExtras != null) sceneObj["extras"] = mapOf("glbandme" to editorExtras)
+        val rt = opt.rootTransform
+        if (rt != null && !opt.projectData) {
+            // wrap everything in one parent node carrying the export transform
+            val rootNode = LinkedHashMap<String, Any?>()
+            rootNode["name"] = opt.rootName
+            rootNode["children"] = nodeIds.toList()
+            rootNode["matrix"] = rt.toList()
+            w.nodes.add(rootNode)
+            sceneObj["nodes"] = listOf(w.nodes.size - 1)
+        }
         root["scenes"] = listOf(sceneObj)
         root["nodes"] = w.nodes
         root["meshes"] = w.meshes

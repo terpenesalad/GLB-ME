@@ -91,17 +91,19 @@ object MeshFormats {
         return ImportResult(objects, warnings)
     }
 
-    fun writeObj(objects: List<SceneObject>, vertexColors: Boolean = true): ByteArray {
+    fun writeObj(objects: List<SceneObject>, vertexColors: Boolean = true, root: FloatArray? = null, mtlName: String? = null, materialNames: Map<SceneObject, String>? = null): ByteArray {
         val out = ByteArrayOutputStream()
         val w = OutputStreamWriter(out, Charsets.UTF_8).buffered(1 shl 16)
         w.write("# Exported by GLB&ME\n")
+        if (mtlName != null) w.write("mtllib $mtlName\n")
         var vBase = 1
         val tmp = FloatArray(3)
         for (o in objects) {
             val m = o.mesh
-            val mat = o.localMatrix()
+            val mat = if (root != null) Mat4.mul(root, o.localMatrix()) else o.localMatrix()
             val nm = Mat4.normalMatrix(mat)
             w.write("o ${o.name.replace(' ', '_')}\n")
+            materialNames?.get(o)?.let { w.write("usemtl $it\n") }
             val c = if (vertexColors) m.colors else null
             for (i in 0 until m.vertexCount) {
                 Mat4.transformPoint(mat, m.positions[i * 3], m.positions[i * 3 + 1], m.positions[i * 3 + 2], tmp)
@@ -110,7 +112,13 @@ object MeshFormats {
                 else w.write(String.format(Locale.US, "v %.6f %.6f %.6f\n", tmp[0], tmp[1], tmp[2]))
             }
             val uv = m.uvs
-            if (uv != null) for (i in 0 until m.vertexCount) w.write(String.format(Locale.US, "vt %.6f %.6f\n", uv[i * 2], 1f - uv[i * 2 + 1]))
+            // bake the material's tiling into the coordinates (OBJ/MTL has no texture transform)
+            val um = if (o.material.hasUvTransform()) o.material.uvMatrix() else null
+            if (uv != null) for (i in 0 until m.vertexCount) {
+                var u = uv[i * 2]; var v = uv[i * 2 + 1]
+                if (um != null) { val nu = um[0] * u + um[3] * v + um[6]; val nv = um[1] * u + um[4] * v + um[7]; u = nu; v = nv }
+                w.write(String.format(Locale.US, "vt %.6f %.6f\n", u, 1f - v))
+            }
             for (i in 0 until m.vertexCount) {
                 val nx = m.normals[i * 3]; val ny = m.normals[i * 3 + 1]; val nz = m.normals[i * 3 + 2]
                 var x = nm[0] * nx + nm[3] * ny + nm[6] * nz
@@ -173,14 +181,17 @@ object MeshFormats {
         return ImportResult(if (count > 0) listOf(SceneObject(name, welded, Material(name = "STL"))) else emptyList(), warnings)
     }
 
-    fun writeStl(objects: List<SceneObject>): ByteArray {
+    /** Default STL orientation: glTF Y-up -> Z-up. */
+    val Y_TO_Z_UP: FloatArray get() = Mat4.fromTRS(app.glbandme.math.Vec3(), app.glbandme.math.Quat.fromEulerDeg(90f, 0f, 0f), app.glbandme.math.Vec3(1f, 1f, 1f))
+
+    fun writeStl(objects: List<SceneObject>, root: FloatArray? = null): ByteArray {
         val tris = objects.sumOf { it.mesh.triangleCount }
         val bb = ByteBuffer.allocate(84 + tris * 50).order(ByteOrder.LITTLE_ENDIAN)
         val header = "GLB&ME binary STL (Z-up)".toByteArray(Charsets.US_ASCII)
         bb.put(header); repeat(80 - header.size) { bb.put(0) }
         bb.putInt(tris)
         // glTF Y-up -> STL Z-up
-        val toZUp = Mat4.fromTRS(app.glbandme.math.Vec3(), app.glbandme.math.Quat.fromEulerDeg(90f, 0f, 0f), app.glbandme.math.Vec3(1f, 1f, 1f))
+        val toZUp = root ?: Y_TO_Z_UP
         val p = FloatArray(9)
         for (o in objects) {
             val mat = Mat4.mul(toZUp, o.localMatrix())
@@ -314,7 +325,7 @@ object MeshFormats {
         }
     }
 
-    fun writePly(objects: List<SceneObject>, vertexColors: Boolean = true): ByteArray {
+    fun writePly(objects: List<SceneObject>, vertexColors: Boolean = true, root: FloatArray? = null): ByteArray {
         val vc = objects.sumOf { it.mesh.vertexCount }
         val tc = objects.sumOf { it.mesh.triangleCount }
         val header = buildString {
@@ -330,7 +341,7 @@ object MeshFormats {
         val tmp = FloatArray(3)
         for (o in objects) {
             val m = o.mesh
-            val mat = o.localMatrix()
+            val mat = if (root != null) Mat4.mul(root, o.localMatrix()) else o.localMatrix()
             val nm = Mat4.normalMatrix(mat)
             val c = m.colors
             for (i in 0 until m.vertexCount) {
@@ -356,7 +367,7 @@ object MeshFormats {
         var base = 0
         for (o in objects) {
             val m = o.mesh
-            val flip = app.glbandme.core.mesh.MeshBuilder.det3(o.localMatrix()) < 0
+            val flip = app.glbandme.core.mesh.MeshBuilder.det3(if (root != null) Mat4.mul(root, o.localMatrix()) else o.localMatrix()) < 0
             for (t in 0 until m.triangleCount) {
                 bb.put(3)
                 val a = m.indices[t * 3]; val b = m.indices[t * 3 + 1]; val cc = m.indices[t * 3 + 2]

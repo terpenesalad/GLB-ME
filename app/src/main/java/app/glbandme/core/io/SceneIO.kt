@@ -8,6 +8,7 @@ import app.glbandme.core.scene.ShadingMode
 enum class ExportFormat(val label: String, val ext: String, val mime: String, val description: String) {
     GLB("GLB", "glb", "model/gltf-binary", "Binary glTF – materials, textures, colors & animation in one file"),
     GLTF("glTF", "gltf", "model/gltf+json", "Text glTF with embedded data"),
+    USDZ("USDZ", "usdz", "model/vnd.usdz+zip", "Apple AR Quick Look – iPhone, iPad, Vision Pro"),
     OBJ("OBJ", "obj", "text/plain", "Wavefront OBJ with vertex colors"),
     STL("STL", "stl", "model/stl", "Binary STL for 3D printing (Z-up)"),
     PLY("PLY", "ply", "application/octet-stream", "Binary PLY with vertex colors");
@@ -53,6 +54,7 @@ object SceneIO {
         return when (format) {
             ExportFormat.GLB -> GltfWriter.write(scene, opt.apply { binary = true; projectData = false })
             ExportFormat.GLTF -> GltfWriter.write(scene, opt.apply { binary = false; projectData = false })
+            ExportFormat.USDZ -> UsdzWriter.write(scene, objs, UsdzWriter.Options(vertexColors = opt.vertexColors, animations = opt.animations, textureEncoder = opt.textureFilter))
             ExportFormat.OBJ -> MeshFormats.writeObj(objs, opt.vertexColors)
             ExportFormat.STL -> MeshFormats.writeStl(objs)
             ExportFormat.PLY -> MeshFormats.writePly(objs, opt.vertexColors)

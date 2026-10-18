@@ -54,13 +54,15 @@ class ShareProvider : ContentProvider() {
             "obj" -> "model/obj"
             "stl" -> "model/stl"
             "ply" -> "application/octet-stream"
+            "usdz" -> "model/vnd.usdz+zip"
+            "zip" -> "application/zip"
             "png" -> "image/png"
             "jpg", "jpeg" -> "image/jpeg"
             else -> "application/octet-stream"
         }
 
         /** Writes bytes to the share cache and opens the Android share sheet. */
-        fun share(act: Activity, fileName: String, bytes: ByteArray, title: String = "Share") {
+        fun share(act: Activity, fileName: String, bytes: ByteArray, title: String = "Share", @Suppress("UNUSED_PARAMETER") mime: String? = null) {
             val dir = File(act.cacheDir, "share").apply { mkdirs() }
             dir.listFiles()?.forEach { if (System.currentTimeMillis() - it.lastModified() > 3_600_000) it.delete() }
             val safe = fileName.replace(Regex("[^A-Za-z0-9._ &()-]"), "_")
