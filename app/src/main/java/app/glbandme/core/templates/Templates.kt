@@ -594,13 +594,16 @@ object Templates {
         val metal = mat("Iron", 0x3A3D42, 1f, 0.45f)
         primObj("Box", PrimType.CUBE, wood, v(0f, 0.22f, 0f), p = arrayOf("width" to 0.8f, "height" to 0.44f, "depth" to 0.5f, "divisions" to 2f))
         val lidMesh = Primitives.cylinder(0.25f, 0.25f, 0.8f, 24, 1)
-        // keep only the upper half of the cylinder -> rounded lid
-        warp(lidMesh) { p -> if (p[1] < 0f) p[1] = 0f }
+        // the cylinder lies along X after the 90° Z rotation; local -X becomes world down:
+        // flatten the lower half -> rounded lid
+        warp(lidMesh) { p -> if (p[0] < 0f) p[0] = 0f }
         val lid = obj("Lid", lidMesh, wood.copy(), v(0f, 0.44f, 0f), euler = v(0f, 0f, 90f))
         val bands = ArrayList<SceneObject>()
         for (x in listOf(-0.28f, 0.28f)) {
             primObj("Band", PrimType.CUBE, metal.copy(), v(x, 0.22f, 0f), p = arrayOf("width" to 0.06f, "height" to 0.45f, "depth" to 0.51f, "divisions" to 1f))
-            bands.add(obj("Lid Band", Primitives.torus(0.255f, 0.02f, 32, 8), metal.copy(), v(x, 0.44f, 0f), euler = v(0f, 0f, 90f), s = v(1f, 1f, 1f)))
+            val band = Primitives.torus(0.255f, 0.02f, 32, 8)
+            warp(band) { p -> if (p[0] < 0f) p[0] = 0f }
+            bands.add(obj("Lid Band", band, metal.copy(), v(x, 0.44f, 0f), euler = v(0f, 0f, 90f)))
         }
         val lock = primObj("Lock", PrimType.CUBE, Material.preset(MaterialPreset.GOLD), v(0f, 0.4f, 0.26f), p = arrayOf("width" to 0.1f, "height" to 0.12f, "depth" to 0.03f, "divisions" to 1f))
         frameCount = 60

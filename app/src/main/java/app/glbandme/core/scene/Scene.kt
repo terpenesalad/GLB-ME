@@ -93,8 +93,8 @@ class RenderSettings {
     var matcap = 0
     var env = EnvPreset.STUDIO
     var exposure = 1f
-    var lightAngle = 35f
-    var lightHeight = 50f
+    var lightAngle = -40f
+    var lightHeight = 45f
     var shadows = true
     var showGrid = true
     var wireframe = false

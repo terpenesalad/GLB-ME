@@ -116,7 +116,8 @@ float shadowFactor(vec3 n) {
     if (!uShadows) return 1.0;
     vec3 p = vLightPos.xyz / vLightPos.w * 0.5 + 0.5;
     if (p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0 || p.z > 1.0) return 1.0;
-    float bias = max(0.0025 * (1.0 - dot(n, uLightDir[0])), 0.0006);
+    float ndl = clamp(dot(n, uLightDir[0]), 0.05, 1.0);
+    float bias = clamp(0.0018 * sqrt(1.0 - ndl * ndl) / ndl, 0.0008, 0.01);
     float s = 0.0;
     for (int x = -1; x <= 1; x++)
         for (int y = -1; y <= 1; y++)
@@ -317,12 +318,15 @@ float gridLine(vec2 p, float scale) {
 
 void main() {
     float dist = length(vWorld.xz - uCamPos.xz);
-    float fade = 1.0 - smoothstep(uFade * 0.35, uFade, dist);
+    float fade = 1.0 - smoothstep(uFade * 0.15, uFade * 0.6, dist);
     float a = 0.0;
     vec3 col = uLineColor;
     if (uShowGrid) {
-        float minor = gridLine(vWorld.xz, uScale) * 0.22;
-        float major = gridLine(vWorld.xz, uScale * 10.0) * 0.45;
+        // fade minor lines out when they get denser than a few pixels
+        vec2 dv = fwidth(vWorld.xz / uScale);
+        float density = clamp(1.0 - max(dv.x, dv.y) * 2.5, 0.0, 1.0);
+        float minor = gridLine(vWorld.xz, uScale) * 0.12 * density;
+        float major = gridLine(vWorld.xz, uScale * 10.0) * 0.32;
         a = max(minor, major);
         // axis lines
         float ax = 1.0 - min(abs(vWorld.z) / fwidth(vWorld.z), 1.0);

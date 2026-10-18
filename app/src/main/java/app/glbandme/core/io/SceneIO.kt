@@ -102,7 +102,7 @@ object SceneIO {
                 r.shading = runCatching { ShadingMode.valueOf(m.s("shading")!!) }.getOrDefault(ShadingMode.PBR)
                 r.matcap = m.i("matcap", 0)
                 r.env = runCatching { EnvPreset.valueOf(m.s("env")!!) }.getOrDefault(EnvPreset.STUDIO)
-                r.exposure = m.f("exposure", 1f); r.lightAngle = m.f("lightAngle", 35f); r.lightHeight = m.f("lightHeight", 50f)
+                r.exposure = m.f("exposure", 1f); r.lightAngle = m.f("lightAngle", -40f); r.lightHeight = m.f("lightHeight", 45f)
                 r.shadows = m.b("shadows", true); r.showGrid = m.b("grid", true); r.wireframe = m.b("wireframe", false)
                 r.bgTop = m.i("bgTop", r.bgTop); r.bgBottom = m.i("bgBottom", r.bgBottom); r.orthographic = m.b("ortho", false)
                 r.fov = m.f("fov", 45f); r.showAxes = m.b("axes", true)
