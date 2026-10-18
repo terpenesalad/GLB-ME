@@ -248,9 +248,10 @@ class Mesh(
         val p = positions
         var dup = false
         for (v in 0 until vc) {
-            val key = (p[v * 3].toRawBits().toLong() * 73856093L) xor
-                (p[v * 3 + 1].toRawBits().toLong() * 19349663L) xor
-                (p[v * 3 + 2].toRawBits().toLong() * 83492791L)
+            // "+ 0f" folds -0.0 into 0.0 so both hash identically
+            val key = ((p[v * 3] + 0f).toRawBits().toLong() * 73856093L) xor
+                ((p[v * 3 + 1] + 0f).toRawBits().toLong() * 19349663L) xor
+                ((p[v * 3 + 2] + 0f).toRawBits().toLong() * 83492791L)
             var r = -1
             var probe = key
             while (true) {
@@ -446,6 +447,9 @@ class IntArrayList(capacity: Int = 16) {
     operator fun get(i: Int) = data[i]
     operator fun set(i: Int, v: Int) { data[i] = v }
     fun clear() { size = 0 }
+    fun dropLast() { if (size > 0) size-- }
+    /** O(1) unordered removal. */
+    fun swapRemove(i: Int) { data[i] = data[size - 1]; size-- }
     fun toArray(): IntArray = data.copyOf(size)
 }
 

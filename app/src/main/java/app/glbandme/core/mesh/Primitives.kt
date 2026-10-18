@@ -148,9 +148,11 @@ object Primitives {
         val b = MeshBuilder().also { it.hasUv = true }
         for (i in 0..r) {
             val phi = i.toFloat() / r * PI.toFloat()
+            val sp = if (i == 0 || i == r) 0f else sin(phi)
+            val cp = if (i == 0) 1f else if (i == r) -1f else cos(phi)
             for (j in 0..s) {
-                val th = j.toFloat() / s * 2f * PI.toFloat()
-                b.vertex(radius * sin(phi) * sin(th), radius * cos(phi), radius * sin(phi) * cos(th), j.toFloat() / s, i.toFloat() / r)
+                val th = (j % s).toFloat() / s * 2f * PI.toFloat()
+                b.vertex(radius * sp * sin(th), radius * cp, radius * sp * cos(th), j.toFloat() / s, i.toFloat() / r)
             }
         }
         val row = s + 1
@@ -218,7 +220,7 @@ object Primitives {
             val y = -h2 + f * height
             val r = rBottom + (rTop - rBottom) * f
             for (j in 0..s) {
-                val th = j.toFloat() / s * 2f * PI.toFloat() + rot
+                val th = (j % s).toFloat() / s * 2f * PI.toFloat() + rot
                 b.vertex(r * sin(th), y, r * cos(th), j.toFloat() / s, 1f - f)
             }
         }
@@ -232,7 +234,7 @@ object Primitives {
                 val c = b.vertex(0f, -h2, 0f, 0.5f, 0.5f)
                 val st = b.vertexCount
                 for (j in 0..s) {
-                    val th = j.toFloat() / s * 2f * PI.toFloat() + rot
+                    val th = (j % s).toFloat() / s * 2f * PI.toFloat() + rot
                     b.vertex(rBottom * sin(th), -h2, rBottom * cos(th), 0.5f + 0.5f * sin(th), 0.5f + 0.5f * cos(th))
                 }
                 for (j in 0 until s) b.tri(c, st + j + 1, st + j)
@@ -241,7 +243,7 @@ object Primitives {
                 val c = b.vertex(0f, h2, 0f, 0.5f, 0.5f)
                 val st = b.vertexCount
                 for (j in 0..s) {
-                    val th = j.toFloat() / s * 2f * PI.toFloat() + rot
+                    val th = (j % s).toFloat() / s * 2f * PI.toFloat() + rot
                     b.vertex(rTop * sin(th), h2, rTop * cos(th), 0.5f + 0.5f * sin(th), 0.5f - 0.5f * cos(th))
                 }
                 for (j in 0 until s) b.tri(c, st + j, st + j + 1)
@@ -254,9 +256,9 @@ object Primitives {
         val s = max(3, segments); val n = max(3, sides)
         val b = MeshBuilder().also { it.hasUv = true }
         for (i in 0..n) {
-            val phi = i.toFloat() / n * 2f * PI.toFloat()
+            val phi = (i % n).toFloat() / n * 2f * PI.toFloat()
             for (j in 0..s) {
-                val th = j.toFloat() / s * 2f * PI.toFloat()
+                val th = (j % s).toFloat() / s * 2f * PI.toFloat()
                 val rr = major + minor * cos(phi)
                 b.vertex(rr * sin(th), minor * sin(phi), rr * cos(th), j.toFloat() / s, i.toFloat() / n)
             }
@@ -324,7 +326,7 @@ object Primitives {
             for (k in prof.indices) {
                 val r = prof[k][0]; val y = prof[k][1]
                 for (j in 0..s) {
-                    val th = j.toFloat() / s * 2f * PI.toFloat()
+                    val th = (j % s).toFloat() / s * 2f * PI.toFloat()
                     b.vertex(r * sin(th), y, r * cos(th), j.toFloat() / s, (1f - lens[k] / total) * uvScaleV)
                 }
             }

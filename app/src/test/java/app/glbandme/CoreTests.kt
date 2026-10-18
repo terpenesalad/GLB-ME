@@ -259,3 +259,20 @@ class CoreTests {
         assertEquals(10f, o.position.x, 1e-5f)
     }
 }
+
+class TemplateTests {
+    @Test fun allTemplatesBuildAndExport() {
+        for (t in app.glbandme.core.templates.Templates.all) {
+            val scene = t.build()
+            assertTrue("${t.id} empty", scene.objects.isNotEmpty())
+            for (o in scene.objects) {
+                for (i in o.mesh.indices) assertTrue("${t.id}/${o.name}", i in 0 until o.mesh.vertexCount)
+                for (f in o.mesh.positions) assertTrue("${t.id}/${o.name} NaN", f.isFinite())
+                for (f in o.mesh.normals) assertTrue("${t.id}/${o.name} normal NaN", f.isFinite())
+            }
+            if (t.animated) assertTrue("${t.id} should animate", scene.hasAnimation())
+            val back = SceneIO.loadProject(SceneIO.saveProject(scene))
+            assertEquals(t.id, scene.objects.size, back.objects.size)
+        }
+    }
+}
