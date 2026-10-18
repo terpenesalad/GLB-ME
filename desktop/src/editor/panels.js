@@ -174,7 +174,7 @@ function lightSection(ed, o) {
     // swap the light type, keeping colour/intensity
     import('./model.js').then(({ makeLight }) => {
       const n = makeLight(t, o.name); n.position.copy(o.position); n.quaternion.copy(o.quaternion);
-      n.ed.light.color.copy(l.color); n.ed.light.intensity = t === 'directional' ? Math.min(l.intensity, 5) : l.intensity; n.ed.keys = o.ed.keys;
+      n.ed.light.color.copy(l.color); n.ed.light.intensity = t === 'directional' ? Math.min(l.intensity, 5) : l.intensity; n.ed.keys = new Map([...o.ed.keys].map(([f, k]) => [f, { p: [...k.p], q: [...k.q], s: [...k.s] }]));
       d.transact('Light type', () => { const i = d.objects.indexOf(o); d.detach(o); d.attach(n, i); d.select(n); }, []);
     });
   }));
@@ -396,6 +396,7 @@ function fillPaint(ed, o, color) {
     return c;
   }, o);
   if (color && !o.material.vertexColors) ed.actions.material('Vertex paint', (mm) => { mm.vertexColors = true; mm.needsUpdate = true; }, o);
+  if (!color && o.material.vertexColors) ed.actions.material('Vertex paint off', (mm) => { mm.vertexColors = false; mm.needsUpdate = true; }, o);
 }
 function facesPanel(ed) {
   const f = ed.vp.faces, ft = ed.vp.faceTool, a = ed.actions;

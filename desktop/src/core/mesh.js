@@ -338,14 +338,19 @@ export function projectUvs(g, mode) {
 
 /** Merge geometries (with optional matrices) into one. */
 export function merge(parts) {
-  const P = [], I = [], C = []; let base = 0; let anyColor = parts.some(([g]) => g.attributes.color);
+  parts = parts.map((x) => (Array.isArray(x) ? x : [x, null]));
+  const P = [], I = [], C = [], U = [], M = []; let base = 0; const anyColor = parts.some(([g]) => g.attributes.color);
+  const anyUv = parts.some(([g]) => g.attributes.uv), anyMask = parts.some(([g]) => g.attributes.mask);
   for (const [g, m4] of parts) {
     const gg = m4 ? g.clone().applyMatrix4(m4) : g;
     if (m4 && m4.determinant() < 0) flipWinding(gg);
     const p = gg.attributes.position.array; for (let i = 0; i < p.length; i++) P.push(p[i]);
     const idx = gg.index.array; for (let i = 0; i < idx.length; i++) I.push(idx[i] + base);
-    if (anyColor) { const c = gg.attributes.color?.array; for (let v = 0; v < gg.attributes.position.count; v++) for (let k = 0; k < 4; k++) C.push(c ? c[v * 4 + k] : 1); }
-    base += gg.attributes.position.count;
+    const n = gg.attributes.position.count;
+    if (anyColor) { const c = gg.attributes.color?.array; for (let v = 0; v < n; v++) for (let k = 0; k < 4; k++) C.push(c ? c[v * 4 + k] : 1); }
+    if (anyUv) { const u = gg.attributes.uv?.array; for (let v = 0; v < n * 2; v++) U.push(u ? u[v] : 0); }
+    if (anyMask) { const mk = gg.attributes.mask?.array; for (let v = 0; v < n; v++) M.push(mk ? mk[v] : 0); }
+    base += n;
   }
-  return fromArrays({ position: P, index: I, color: anyColor ? C : null });
+  return fromArrays({ position: P, index: I, color: anyColor ? C : null, uv: anyUv ? U : null, mask: anyMask ? M : null });
 }

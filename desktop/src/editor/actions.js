@@ -9,6 +9,13 @@ import { decimate } from './io.js';
 import { stickerTexture } from './textures.js';
 import { loadFont } from './fonts.js';
 
+/** Replaces geometry during a live drag, freeing the previous temporary one (never one held by undo). */
+function swapLive(o, geo) {
+  const old = o.geometry;
+  if (o.ed.liveTemp && o.ed.liveTemp === old) { old.disposeBoundsTree?.(); old.dispose(); }
+  o.geometry = geo; o.ed.liveTemp = geo;
+}
+
 export const PALETTE = [0xd9d9de, 0xff6b6b, 0xffa94d, 0xffd43b, 0x69db7c, 0x38d9a9, 0x4dabf7, 0x748ffc, 0xda77f2, 0xf783ac, 0x8d6e63, 0x343a40];
 
 export class Actions {
@@ -54,7 +61,7 @@ export class Actions {
   rebuildPrimitive(o, params, live = false) {
     const geo = buildShape(o.ed.prim.type, params);
     if (live) { // live slider drag: no undo record
-      o.geometry = prepareGeometry(geo); o.ed.prim = { type: o.ed.prim.type, params: { ...params } }; this.doc.touch(); return;
+      swapLive(o, prepareGeometry(geo)); o.ed.prim = { type: o.ed.prim.type, params: { ...params } }; this.doc.touch(); return;
     }
     this.doc.transact('Edit shape', () => { o.geometry = prepareGeometry(geo); o.ed.prim = { type: o.ed.prim.type, params: { ...params } }; }, [o]);
   }
@@ -85,7 +92,7 @@ export class Actions {
     if (!geo) return false;
     prepareGeometry(geo);
     const name = spec.text.split('\n')[0].slice(0, 24) || 'Text';
-    if (live) { o.geometry = geo; o.ed.text = { ...spec }; this.doc.touch(); return true; }
+    if (live) { swapLive(o, geo); o.ed.text = { ...spec }; this.doc.touch(); return true; }
     this.doc.transact('Edit text', () => { o.geometry = geo; o.ed.text = { ...spec }; if (o.name.startsWith(o.ed.textName || '\u0000') || !o.ed.renamed) o.name = name; }, [o]);
     return true;
   }
@@ -156,7 +163,6 @@ export class Actions {
     o.updateMatrix();
     const g = cloneGeometry(o.geometry);
     applyMatrix(g, o.matrix); bumpTopo(g);
-    if (o.matrix.determinant() < 0) { flipWinding(g); computeNormals(g); }
     this.doc.transact('Apply transform', () => { o.geometry = prepareGeometry(g); o.position.set(0, 0, 0); o.quaternion.identity(); o.scale.set(1, 1, 1); o.ed.prim = null; o.ed.text = null; o.ed.keys = new Map(); }, [o]);
   }
   /** Moves the pivot to the geometry's centre or bottom without moving the mesh. */
@@ -166,7 +172,10 @@ export class Actions {
     const c = g.boundingBox.getCenter(new THREE.Vector3()); if (where === 'bottom') c.y = g.boundingBox.min.y;
     g.translate(-c.x, -c.y, -c.z);
     const shift = c.clone().multiply(o.scale).applyQuaternion(o.quaternion);
-    this.doc.transact('Set origin', () => { o.geometry = prepareGeometry(g); o.position.add(shift); o.ed.prim = null; o.ed.text = null; }, [o]);
+    this.doc.transact('Set origin', () => {
+      o.geometry = prepareGeometry(g); o.position.add(shift); o.ed.prim = null; o.ed.text = null;
+      for (const k of o.ed.keys.values()) { const ks = c.clone().multiply(new THREE.Vector3().fromArray(k.s)).applyQuaternion(new THREE.Quaternion().fromArray(k.q)); k.p = [k.p[0] + ks.x, k.p[1] + ks.y, k.p[2] + ks.z]; }
+    }, [o]);
   }
   /** Turns a parametric shape or text into a plain editable mesh. */
   makeEditable(o = this.sel(), silent = false) {

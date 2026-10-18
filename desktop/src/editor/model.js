@@ -133,8 +133,8 @@ export class Doc extends EventTarget {
   }
   emit(type, detail) { this.dispatchEvent(new CustomEvent(type, { detail })); }
   /** Something visible changed but nothing structural (viewport redraw only). */
-  touch() { this.emit('touch'); }
-  changed(what = 'all') { this.dirty = true; this.emit('change', what); }
+  changed(what = 'all') { this.dirty = true; this.changeCount = (this.changeCount || 0) + 1; this.emit('change', what); }
+  touch() { this.dirty = true; this.changeCount = (this.changeCount || 0) + 1; this.emit('touch'); }
 
   attach(o, index = this.objects.length) { this.objects.splice(index, 0, o); this.root.add(o); }
   detach(o) { const i = this.objects.indexOf(o); if (i >= 0) this.objects.splice(i, 1); this.root.remove(o); if (this.selected === o) this.selected = null; }
@@ -161,9 +161,10 @@ export class Doc extends EventTarget {
     const targets = new Set(objs || (this.selected ? [this.selected] : []));
     return { label, targets, list: [...this.objects], sel: this.selected, before: new Map([...targets].map((o) => [o, snapObject(o)])) };
   }
-  cancel(tok) { for (const [o, s] of tok.before) restoreObject(o, s); this.setList(tok.list, tok.sel); this.changed(); }
+  cancel(tok) { for (const o of tok.targets) if (o.ed) o.ed.liveTemp = null; for (const [o, s] of tok.before) restoreObject(o, s); this.setList(tok.list, tok.sel); this.changed(); }
   commit(tok, { force = false } = {}) {
     const { label, targets, before } = tok, listBefore = tok.list, selBefore = tok.sel;
+    for (const o of targets) if (o.ed) o.ed.liveTemp = null;
     for (const o of this.objects) if (!listBefore.includes(o)) targets.add(o);
     const after = new Map([...targets].map((o) => [o, snapObject(o)]));
     const listAfter = [...this.objects], selAfter = this.selected;

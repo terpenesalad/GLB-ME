@@ -12,6 +12,8 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: t
 const distDir = path.join(__dirname, '..', 'dist');
 let win = null;
 let pendingOpen = [];
+const allowedFiles = new Set();
+const systemFontFiles = new Set();
 
 const dataDir = () => path.join(app.getPath('userData'), 'library');
 const projectsDir = () => path.join(dataDir(), 'projects');
@@ -33,8 +35,19 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false, spellcheck: false },
   });
   win.once('ready-to-show', () => win.show());
+  // let the renderer save the open project before the window goes away
+  let allowClose = false;
+  win.on('close', (e) => {
+    if (allowClose) return;
+    e.preventDefault();
+    win.webContents.send('app-closing');
+    setTimeout(() => { allowClose = true; if (win && !win.isDestroyed()) win.close(); }, 10000);
+  });
+  ipcMain.removeHandler('app:closeReady');
+  ipcMain.handle('app:closeReady', () => { allowClose = true; setImmediate(() => win && !win.isDestroyed() && win.close()); });
+  win.on('closed', () => { win = null; });
   win.loadURL('app://glbandme/index.html');
-  win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+  win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('app://glbandme/')) { e.preventDefault(); if (/^https:\/\//.test(url)) shell.openExternal(url); } });
 }
 
@@ -44,20 +57,27 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', (_e, argv) => {
     const files = fileArgs(argv);
+    files.forEach((f) => allowedFiles.add(path.resolve(f)));
     if (win) { if (win.isMinimized()) win.restore(); win.focus(); files.forEach((f) => win.webContents.send('open-file', f)); }
   });
 }
-app.on('open-file', (e, file) => { e.preventDefault(); if (win) win.webContents.send('open-file', file); else pendingOpen.push(file); });
+app.on('open-file', (e, file) => {
+  e.preventDefault();
+  allowedFiles.add(path.resolve(file));
+  if (win && !win.isDestroyed()) win.webContents.send('open-file', file);
+  else { pendingOpen.push(file); if (app.isReady()) createWindow(); }
+});
 
 app.whenReady().then(() => {
   protocol.handle('app', (req) => {
     const u = new URL(req.url);
     const file = path.normalize(path.join(distDir, decodeURIComponent(u.pathname)));
-    if (!file.startsWith(distDir)) return new Response('forbidden', { status: 403 });
+    if (!file.startsWith(distDir + path.sep)) return new Response('forbidden', { status: 403 });
     return net.fetch(pathToFileURL(file).toString());
   });
   ensureDirs();
   pendingOpen.push(...fileArgs(process.argv.slice(1)));
+  pendingOpen.forEach((f) => allowedFiles.add(path.resolve(f)));
   if (isMac) Menu.setApplicationMenu(Menu.buildFromTemplate([
     { role: 'appMenu' }, { role: 'editMenu' }, { label: 'View', submenu: [{ role: 'togglefullscreen' }, { role: 'toggleDevTools' }] }, { role: 'windowMenu' },
   ]));
@@ -107,7 +127,12 @@ ipcMain.handle('file:open', async (_e, opts) => {
   if (r.canceled) return [];
   return r.filePaths.map((p) => ({ name: path.basename(p), path: p, data: fs.readFileSync(p) }));
 });
-ipcMain.handle('file:read', (_e, p) => ({ name: path.basename(p), path: p, data: fs.readFileSync(p) }));
+// only files the user opened through the OS ("Open with" / drag onto the icon) can be read by path
+ipcMain.handle('file:read', (_e, p) => {
+  const rp = path.resolve(String(p));
+  if (!allowedFiles.has(rp)) throw new Error('not allowed');
+  return { name: path.basename(rp), path: rp, data: fs.readFileSync(rp) };
+});
 ipcMain.handle('file:save', async (_e, name, data, filters) => {
   const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), name), filters: filters || [] });
   if (r.canceled || !r.filePath) return null;
@@ -126,7 +151,7 @@ ipcMain.handle('fonts:imported', () => {
 });
 ipcMain.handle('fonts:read', (_e, id) => {
   if (id.startsWith('file:')) return fs.readFileSync(path.join(fontsDir(), path.basename(id.slice(5))));
-  if (id.startsWith('sys:')) return fs.readFileSync(id.slice(4));
+  if (id.startsWith('sys:')) { const p = path.resolve(id.slice(4)); if (!systemFontFiles.has(p)) throw new Error('unknown font'); return fs.readFileSync(p); }
   throw new Error('unknown font');
 });
 ipcMain.handle('fonts:import', (_e, name, data) => {
@@ -151,7 +176,7 @@ ipcMain.handle('fonts:system', () => {
     for (const e of ents) {
       const p = path.join(d, e.name);
       if (e.isDirectory() && depth < 4) walk(p, depth + 1);
-      else if (/\.(ttf|otf)$/i.test(e.name)) out.push({ id: 'sys:' + p, file: e.name });
+      else if (/\.(ttf|otf)$/i.test(e.name)) { systemFontFiles.add(path.resolve(p)); out.push({ id: 'sys:' + p, file: e.name }); }
     }
   };
   dirs.forEach((d) => walk(d, 0));

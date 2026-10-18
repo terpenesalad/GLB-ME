@@ -34,5 +34,7 @@ contextBridge.exposeInMainWorld('glbme', {
     version: () => ipcRenderer.invoke('app:version'),
     openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
     onOpenFile: (cb) => ipcRenderer.on('open-file', (_e, p) => cb(p)),
+    onClosing: (cb) => ipcRenderer.on('app-closing', () => cb()),
+    closeReady: () => ipcRenderer.invoke('app:closeReady'),
   },
 });

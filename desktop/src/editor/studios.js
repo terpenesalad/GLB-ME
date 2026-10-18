@@ -317,8 +317,9 @@ export async function templatePicker(ed, onPick = null) {
     try {
       const data = await (await fetch(`templates/${t.id}.glb`)).arrayBuffer();
       const r = await parseGltf(data);
+      const hadAnim = ed.doc.hasAnimation();
       ed.actions.addObjects(r.objects, 'Insert ' + t.name);
-      if (r.frameCount && !ed.doc.hasAnimation()) ed.doc.frameCount = r.frameCount;
+      if (r.frameCount && !hadAnim) ed.doc.frameCount = r.frameCount;
       ed.vp.frame(ed.doc.objects);
     } finally { b.close(); }
   } }, h('div', { class: 'thumb' }, h('img', { src: `templates/${t.id}.png`, alt: '', loading: 'lazy', onerror: (e) => { e.target.replaceWith(icon('box')); } })), t.animated ? h('span', { class: 'badge' }, 'Animated') : null, h('div', { class: 'meta' }, h('b', null, t.name), h('span', null, t.description)))));

@@ -44,8 +44,8 @@ export class Editor {
     this.canvas = h('canvas', { class: 'viewport', 'aria-label': '3D viewport. Left-drag to orbit, right-drag to orbit, middle-drag or Shift-drag to pan, wheel to zoom.' });
     this.cursor = h('div', { class: 'brushcursor', style: { display: 'none' } });
     this.titleEl = h('span', null, 'Untitled');
-    this.undoBtn = ibtn('undo-2', ['Undo', 'Ctrl+Z'], () => this.doc.undo());
-    this.redoBtn = ibtn('redo-2', ['Redo', 'Ctrl+Shift+Z'], () => this.doc.redo());
+    this.undoBtn = ibtn('undo-2', ['Undo', 'Ctrl+Z'], () => { if (!this.vp.drag) this.doc.undo(); });
+    this.redoBtn = ibtn('redo-2', ['Redo', 'Ctrl+Shift+Z'], () => { if (!this.vp.drag) this.doc.redo(); });
     this.modeSeg = h('div', { class: 'modes', role: 'radiogroup', 'aria-label': 'Editing mode' });
     for (const [id, label, ic, key] of MODES) {
       this.modeSeg.appendChild(h('button', { role: 'radio', 'aria-checked': String(id === 'object'), 'data-mode': id, tip: [label + ' mode', key], onclick: () => this.setMode(id) }, icon(ic), label));
@@ -75,7 +75,8 @@ export class Editor {
     this.right = h('aside', { class: 'panel right', 'aria-label': 'Inspector' }, h('div', { class: 'phead' }, this.rightTitle = h('h3', null, 'Inspector'), this.rightTools = h('div', { class: 'row' })), this.tabsEl, this.rightBody);
     let busyPanel = false;
     this.right.addEventListener('pointerdown', () => { busyPanel = true; });
-    window.addEventListener('pointerup', () => { if (busyPanel) { busyPanel = false; if (this.pendingRefresh) setTimeout(() => this.refresh(), 0); } });
+    this.upHandler = () => { if (busyPanel) { busyPanel = false; if (this.pendingRefresh) setTimeout(() => this.refresh(), 0); } };
+    window.addEventListener('pointerup', this.upHandler);
     this.panelBusy = () => busyPanel || (this.right.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && document.activeElement.type !== 'range');
     this.strip = h('div', { class: 'strip', role: 'toolbar', 'aria-label': 'Tools' });
     this.timeline = h('div', { class: 'timeline', style: { display: 'none' }, role: 'region', 'aria-label': 'Timeline' });
@@ -135,10 +136,15 @@ export class Editor {
       else { this.vp.frame(null, false); }
       if (importFiles) await this.handleFiles(importFiles, true);
       if (!data && !importFiles && project.start) await this.startWith(project.start);
-      this.doc.dirty = false;
+      this.doc.dirty = false; this.doc.changeCount = 0;
       this.doc.history.clear();
-    } catch (e) { console.error(e); this.toast('Could not open: ' + e.message); }
-    finally { b.close(); }
+    } catch (e) {
+      console.error(e); b.close();
+      this.loadFailed = true; // never overwrite the original project with an empty scene
+      this.toast('Could not open: ' + e.message, 5000);
+      setTimeout(() => this.app.closeEditor(), 50);
+      return;
+    } finally { b.close(); }
     if (!this.mode || (this.mode !== 'sculpt')) this.setMode('object');
     this.vp.frame(this.doc.objects, false);
     this.refresh();
@@ -150,21 +156,26 @@ export class Editor {
     else if (kind?.startsWith('shape:')) { this.actions.addShape(kind.slice(6)); this.doc.history.clear(); }
   }
   async save(silent = false) {
-    if (this.saving) return; this.saving = true;
+    if (this.loadFailed || !this.project) return;
+    while (this.saving) await this.saving;
+    let done; this.saving = new Promise((r) => { done = r; });
+    const changeAtStart = this.doc.changeCount;
     try {
       const glb = await saveProject(this.doc, this.vp);
       const thumb = await this.vp.thumbnail(384);
       const st = this.doc.stats();
       this.project = await platform.projects.save(this.project.id, { name: this.doc.name, triangles: st.tris, objects: st.objects, animated: this.doc.hasAnimation() }, glb, thumb);
-      this.doc.dirty = false;
+      if (this.doc.changeCount === changeAtStart) this.doc.dirty = false;
       if (!silent) this.toast('Saved');
     } catch (e) { console.error(e); this.toast('Save failed: ' + e.message); }
-    finally { this.saving = false; }
+    finally { this.saving = null; done(); }
   }
   async close() {
-    if (this.doc.dirty || this.doc.history.canUndo) await this.save(true);
     clearInterval(this.autosaveTimer);
+    while (this.saving) await this.saving;
+    if (this.doc.dirty) await this.save(true);
     window.removeEventListener('keydown', this.keyHandler);
+    window.removeEventListener('pointerup', this.upHandler);
     this.vp.dispose(); this.vp.disposed = true;
     hideTip(); closeMenu();
   }
@@ -324,6 +335,7 @@ export class Editor {
     if (anyModalOpen()) return;
     const ctrl = e.ctrlKey || e.metaKey, k = e.key.toLowerCase(), d = this.doc, o = d.selected, a = this.actions;
     const done = () => { e.preventDefault(); e.stopPropagation(); };
+    if (ctrl && (k === 'z' || k === 'y') && (this.vp.drag || this.vp.stroke)) { done(); return; } // not mid-stroke
     if (ctrl && k === 'z') { done(); e.shiftKey ? d.redo() : d.undo(); return; }
     if (ctrl && k === 'y') { done(); d.redo(); return; }
     if (ctrl && k === 's') { done(); this.save(); return; }

@@ -178,6 +178,7 @@ function convertMaterial(m, fromGltf) {
   const ex = out.userData?.glbandme;
   out.userData = { tiling: [1, 1], offset: [0, 0], rotation: 0, pixel: false, maps: {}, ...(ex || {}) };
   if (!ex && out.map) { out.userData.tiling = [out.map.repeat.x, out.map.repeat.y]; out.userData.offset = [out.map.offset.x, out.map.offset.y]; out.userData.rotation = out.map.rotation; out.userData.pixel = out.map.magFilter === THREE.NearestFilter; out.userData.maps = { kind: 'image', name: out.map.name || 'Texture' }; }
+  if (ex?.decal || out.userData.maps?.kind === 'sticker') { out.polygonOffset = true; out.polygonOffsetFactor = -4; out.polygonOffsetUnits = -4; out.depthWrite = false; out.transparent = true; }
   if (fromGltf) for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap']) if (out[k]) out[k] = toCanvasTexture(out[k]);
   if (out.metalnessMap && out.roughnessMap === out.metalnessMap) { /* keep packed */ }
   syncTextures(out);
@@ -281,19 +282,6 @@ export function buildScene(doc, opts = {}) {
     map.set(o, n);
     root.add(n);
   }
-  // restore rest pose for animated objects: export first key as node transform
-  // export transform (origin / scale / up axis)
-  if (!opts.project) {
-    root.updateMatrixWorld(true);
-    const box = new THREE.Box3(); for (const n of root.children) if (n.isMesh) box.expandByObject(n);
-    if (!box.isEmpty() && opts.origin && opts.origin !== 'keep') {
-      const c = box.getCenter(new THREE.Vector3()); if (opts.origin === 'bottom') c.y = box.min.y;
-      for (const n of root.children) n.position.sub(c);
-    }
-    const s = opts.scale ?? 1;
-    if (opts.upZ) root.rotation.x = Math.PI / 2;
-    root.scale.setScalar(s);
-  }
   let clips = [];
   if (opts.animations !== false && doc.hasAnimation()) {
     const tracks = [];
@@ -308,40 +296,58 @@ export function buildScene(doc, opts = {}) {
         let q = [...k.q]; if (prev && prev[0] * q[0] + prev[1] * q[1] + prev[2] * q[2] + prev[3] * q[3] < 0) q = q.map((x) => -x);
         Q.push(...q); prev = q;
       }
-      if (frames.length === 1) { times.push(times[0] + 1 / doc.fps); P.push(...P); Q.push(...Q); S.push(...S); }
       tracks.push(new THREE.VectorKeyframeTrack(n.uuid + '.position', times, P), new THREE.QuaternionKeyframeTrack(n.uuid + '.quaternion', times, Q), new THREE.VectorKeyframeTrack(n.uuid + '.scale', times, S));
+      // rest pose = first key
       const k0 = o.ed.keys.get(frames[0]); n.position.fromArray(k0.p); n.quaternion.fromArray(k0.q); n.scale.fromArray(k0.s);
     }
     if (tracks.length) clips = [new THREE.AnimationClip('Animation', -1, tracks)];
   }
-  if (opts.merge && !opts.project) {
+  // export transform (origin / scale / up axis) lives on wrapper groups so animation tracks stay valid
+  if (!opts.project) {
+    const inner = new THREE.Group(); inner.name = 'Model';
+    for (const n of root.children.slice()) inner.add(n);
+    root.add(inner);
     root.updateMatrixWorld(true);
-    const geos = [], mats = [];
-    for (const n of root.children) if (n.isMesh) {
-      const g = n.geometry.clone().applyMatrix4(n.matrixWorld);
-      for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(k)) g.deleteAttribute(k);
-      geos.push(g); mats.push(n.material);
+    const box = new THREE.Box3(); for (const n of inner.children) if (n.isMesh) box.expandByObject(n);
+    if (!box.isEmpty() && opts.origin && opts.origin !== 'keep') {
+      const c = box.getCenter(new THREE.Vector3()); if (opts.origin === 'bottom') c.y = box.min.y;
+      inner.position.copy(c).negate();
     }
-    if (geos.length) {
-      // all geometries need the same attribute set
-      const has = (k) => geos.every((g) => g.attributes[k]);
-      for (const g of geos) for (const k of ['uv', 'color']) if (!has(k) && g.attributes[k]) g.deleteAttribute(k);
-      const merged = mergeGeometries(geos, true);
-      const m = new THREE.Mesh(merged, mats.length === 1 ? mats[0] : mats); m.name = opts.rootName || 'Model';
-      const lights = root.children.filter((n) => n.isLight);
-      root.clear(); root.rotation.set(0, 0, 0); root.scale.set(1, 1, 1); root.add(m, ...lights);
-      clips = [];
+    if (opts.upZ) root.rotation.x = Math.PI / 2;
+    root.scale.setScalar(opts.scale ?? 1);
+    root.updateMatrixWorld(true);
+    if (opts.merge) {
+      const geos = [], mats = [];
+      inner.traverse((n) => {
+        if (!n.isMesh) return;
+        const g = n.geometry.clone().applyMatrix4(n.matrixWorld);
+        if (n.matrixWorld.determinant() < 0) flipIndex(g);
+        for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(k)) g.deleteAttribute(k);
+        geos.push(g); mats.push(n.material);
+      });
+      if (geos.length) {
+        const has = (k) => geos.every((g) => g.attributes[k]);
+        for (const g of geos) for (const k of ['uv', 'color']) if (!has(k) && g.attributes[k]) g.deleteAttribute(k);
+        const merged = mergeGeometries(geos, true);
+        const m = new THREE.Mesh(merged, mats.length === 1 ? mats[0] : mats); m.name = opts.rootName || 'Model';
+        const lights = [];
+        inner.traverse((n) => { if (n.isLight) { n.matrixWorld.decompose(n.position, n.quaternion, n.scale); lights.push(n); } });
+        root.clear(); root.position.set(0, 0, 0); root.rotation.set(0, 0, 0); root.scale.set(1, 1, 1); root.add(m, ...lights);
+        clips = [];
+      }
     }
+    root.updateMatrixWorld(true);
   }
   if (opts.project) { for (const c of root.children.slice()) scene.add(c); } else scene.add(root);
+  scene.updateMatrixWorld(true);
   return { scene, clips, map };
 }
+function flipIndex(g) { const i = g.index.array; for (let t = 0; t < i.length; t += 3) { const x = i[t + 1]; i[t + 1] = i[t + 2]; i[t + 2] = x; } }
 function allWhite(c) { for (let i = 0; i < c.length; i++) if (c[i] < 0.995) return false; return true; }
-const projMats = new WeakMap();
 function projectMaterial(m) {
   const out = m.clone();
   const u = m.userData;
-  out.userData = { glbandme: { tiling: u.tiling, offset: u.offset, rotation: u.rotation, pixel: u.pixel, maps: u.maps } };
+  out.userData = { glbandme: { tiling: u.tiling, offset: u.offset, rotation: u.rotation, pixel: u.pixel, maps: u.maps, ...(m.polygonOffset ? { decal: true } : {}) } };
   return out;
 }
 function exportMaterial(m, vc) {

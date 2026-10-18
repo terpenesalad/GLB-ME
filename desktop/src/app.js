@@ -21,6 +21,10 @@ class App {
     platform.app.onOpenFile?.((p) => this.openPath(p));
     platform.app.pending?.().then((list) => list?.forEach((p) => this.openPath(p)));
     window.addEventListener('beforeunload', () => { if (this.editor?.doc.dirty) this.editor.save(true); });
+    platform.app.onClosing?.(async () => {
+      try { if (this.editor) { while (this.editor.saving) await this.editor.saving; if (this.editor.doc.dirty) await this.editor.save(true); } } catch (e) { console.error(e); }
+      platform.app.closeReady();
+    });
     window.addEventListener('dragover', (e) => e.preventDefault());
     window.addEventListener('drop', (e) => e.preventDefault());
   }

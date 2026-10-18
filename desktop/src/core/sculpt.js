@@ -1,7 +1,7 @@
 // Nomad-style sculpting on a BufferGeometry in its local space (port of the Android SculptEngine).
 // Works on seam-welded vertex groups so UV seams never tear, records sparse undo data and
 // updates normals incrementally.
-import { weldInfo, weldedNeighbours, vertexTriangles, ensureColors, ensureMask } from './mesh.js';
+import { weldInfo, weldedNeighbours, vertexTriangles, ensureColors, ensureMask, computeNormals as computeNormalsFull } from './mesh.js';
 
 export const BRUSHES = [
   ['CLAY', 'Clay', 'brush'], ['DRAW', 'Draw', 'pencil'], ['INFLATE', 'Inflate', 'circle-plus'], ['SMOOTH', 'Smooth', 'waves'],
@@ -341,7 +341,9 @@ export class SculptEngine {
       if (g.attributes.color) g.attributes.color.needsUpdate = true;
       if (g.attributes.mask) g.attributes.mask.needsUpdate = true;
       g.userData.geomVersion = (g.userData.geomVersion || 0) + 1;
-      if (engine.cacheGeo === g) { engine.computeAllFaceNormals(); engine.geo = g; engine.updateNormals(Array.from(idx)); engine.geo = null; engine.grid = null; }
+      const prevGeo = engine.geo;
+      if (engine.cacheGeo === g) { engine.geo = g; engine.computeAllFaceNormals(); engine.updateNormals(Array.from(idx)); engine.geo = prevGeo; engine.grid = null; }
+      else { computeNormalsFull(g); }
     };
     return { label: BRUSHES.find((b) => b.id === this.type)?.label || 'Sculpt', bytes: n * 40, undo: () => applyState(before, beforeC, beforeM), redo: () => applyState(after, afterC, afterM) };
   }
