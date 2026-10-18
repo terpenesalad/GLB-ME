@@ -50,6 +50,7 @@ class EditorActivity : BaseActivity() {
         private const val REQ_EXPORT = 12
         private const val REQ_IMAGE = 13
         private const val REQ_SAVE_PNG = 14
+        private const val TOOL_W = 52
     }
 
     lateinit var editor: Editor; private set
@@ -144,6 +145,7 @@ class EditorActivity : BaseActivity() {
         undoBtn = IconButton(this, Icon.UNDO).apply { onClick = { editor.undo.undo()?.let { status("Undo $it", 900) } }; onLongClick = { showHistory() } }
         redoBtn = IconButton(this, Icon.REDO).apply { onClick = { editor.undo.redo()?.let { status("Redo $it", 900) } } }
         topBar.addView(undoBtn); topBar.addView(redoBtn)
+        topBar.addView(IconButton(this, Icon.EYE).apply { onClick = { setChromeHidden(!chromeHidden); icon = if (chromeHidden) Icon.EYE_OFF else Icon.EYE; invalidate() } })
         topBar.addView(IconButton(this, Icon.SAVE).apply { onClick = { save(true) } })
         topBar.addView(IconButton(this, Icon.MORE).apply { onClick = { filesMenu() } })
         root.addView(topBar, flp(WRAP, WRAP))
@@ -165,15 +167,18 @@ class EditorActivity : BaseActivity() {
         root.addView(hscroll(tabs), flp(WRAP, WRAP))
 
         // --- right tool palette ----------------------------------------------------------------
-        toolColumn = vbox().apply { setPadding(dp(3), dp(4), dp(3), dp(4)) }
+        // Explicit sizes everywhere: a vertical LinearLayout defaults children to MATCH_PARENT,
+        // which made the palette stretch across the whole screen.
+        toolColumn = vbox().apply { setPadding(dp(3), dp(4), dp(3), dp(4)); gravity = Gravity.CENTER_HORIZONTAL }
         for (t in Tool.values()) {
-            val b = IconButton(this, t.icon, t.label, 44).apply { compactLabel = true; onClick = { selectTool(t) } }
+            val b = IconButton(this, t.icon, t.label, 48).apply { compactLabel = true; onClick = { selectTool(t) } }
             toolButtons[t] = b
-            toolColumn.addView(b)
-            if (t == Tool.SELECT) toolColumn.addView(View(this).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(MATCH, 1).apply { setMargins(dp(8), dp(4), dp(8), dp(4)) })
+            toolColumn.addView(b, LinearLayout.LayoutParams(dp(TOOL_W), WRAP))
+            if (t == Tool.SELECT) toolColumn.addView(View(this).apply { setBackgroundColor(0x22FFFFFF) }, LinearLayout.LayoutParams(dp(TOOL_W - 16), 1).apply { setMargins(dp(8), dp(4), dp(8), dp(4)) })
         }
-        toolScroll = ScrollView(this).apply { isVerticalScrollBarEnabled = false; background = glass(18f); addView(toolColumn) }
-        root.addView(toolScroll, flp(WRAP, WRAP))
+        toolScroll = ScrollView(this).apply { isVerticalScrollBarEnabled = false; background = glass(18f) }
+        toolScroll.addView(toolColumn, FrameLayout.LayoutParams(dp(TOOL_W + 6), WRAP))
+        root.addView(toolScroll, flp(dp(TOOL_W + 6), WRAP))
 
         // --- left sliders ------------------------------------------------------------------------
         leftColumn = vbox(0, 8).apply { gravity = Gravity.CENTER_HORIZONTAL }
@@ -193,9 +198,8 @@ class EditorActivity : BaseActivity() {
             filled = true
             onClick = { val on = !editor.symmetry(0); editor.setSymmetry(0, on); active = on; status(if (on) "Symmetry X on" else "Symmetry off", 900) }
         }
-        leftColumn.addView(radiusSlider); leftColumn.addView(intensitySlider)
-        leftColumn.addView(negButton); leftColumn.addView(symButton)
-        root.addView(leftColumn, flp(WRAP, WRAP))
+        for (v in listOf(radiusSlider, intensitySlider, negButton, symButton)) leftColumn.addView(v, LinearLayout.LayoutParams(dp(44), WRAP).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        root.addView(leftColumn, flp(dp(48), WRAP))
 
         // --- bottom context bar -------------------------------------------------------------------
         bottomBar = hbox(0, 4).apply { setPadding(dp(6), dp(3), dp(6), dp(3)) }
@@ -221,6 +225,24 @@ class EditorActivity : BaseActivity() {
     }
 
     private var lastInsets = Insets(0, 0, 0, 0)
+    private var chromeHidden = false
+
+    /** Hide everything except the top bar to look at the model unobstructed. */
+    private fun setChromeHidden(hidden: Boolean) {
+        chromeHidden = hidden
+        if (hidden) closePanel()
+        val vis = if (hidden) View.GONE else View.VISIBLE
+        (tabs.parent as View).visibility = vis
+        toolScroll.visibility = vis
+        bottomScroll.visibility = vis
+        timeline?.visibility = vis
+        if (hidden) leftColumn.visibility = View.GONE else refreshTool()
+        overlay.hideHud = hidden
+        viewport.gizmo.suppressed = hidden
+        viewport.requestRender()
+        overlay.invalidate()
+        status(if (hidden) "Interface hidden – tap the eye to bring it back" else null, if (hidden) 1600 else 0)
+    }
 
     private fun layoutChrome(i: Insets) {
         lastInsets = i
@@ -241,12 +263,12 @@ class EditorActivity : BaseActivity() {
         val availH = screenH - contentTop - (bottomY + bottomH + dp(10)) - timelineH
         (toolScroll.layoutParams as FrameLayout.LayoutParams).apply { gravity = Gravity.END or Gravity.TOP; rightMargin = i.right + m; topMargin = contentTop; height = minOf(availH, dp(14 * 56 + 30)).coerceAtLeast(dp(120)) }
         (leftColumn.layoutParams as FrameLayout.LayoutParams).apply { gravity = Gravity.START or Gravity.TOP; leftMargin = i.left + m; topMargin = contentTop + dp(40) }
-        val pw = minOf(screenW - i.left - i.right - dp(16) - dp(70), dp(400))
+        val pw = minOf(screenW - i.left - i.right - dp(16) - dp(TOOL_W + 14), dp(400))
         (panelCard.layoutParams as FrameLayout.LayoutParams).apply { gravity = Gravity.START or Gravity.TOP; leftMargin = i.left + m; topMargin = contentTop; width = pw }
         panelBody.layoutParams = (panelBody.layoutParams as LinearLayout.LayoutParams).apply { height = WRAP }
         panelMaxH = (availH - dp(50)).coerceAtLeast(dp(200))
         (statusView.layoutParams as FrameLayout.LayoutParams).apply { topMargin = contentTop + dp(4) }
-        overlay.navCx = (screenW - i.right - m - dp(60 + 52)).toFloat()
+        overlay.navCx = (screenW - i.right - m - dp(TOOL_W + 6 + 52)).toFloat()
         overlay.navCy = (contentTop + dp(48)).toFloat()
         overlay.statsX = (i.left + dp(14)).toFloat()
         overlay.statsY = (screenH - bottomY - bottomH - dp(12) - timelineH).toFloat()
@@ -268,7 +290,7 @@ class EditorActivity : BaseActivity() {
         val t = editor.tool
         for ((k, b) in toolButtons) b.active = k == t
         val brush = editor.currentBrush
-        val showLeft = brush != null || t == Tool.SELECT
+        val showLeft = (brush != null || t == Tool.SELECT) && !chromeHidden
         leftColumn.visibility = if (showLeft) View.VISIBLE else View.GONE
         if (brush != null) {
             radiusSlider.value = brush.radiusPx

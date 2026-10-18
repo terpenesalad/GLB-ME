@@ -62,7 +62,7 @@ class Viewport(ctx: Context, val ed: Editor, msaa: Boolean) : GLSurfaceView(ctx)
                 val opt = RenderOptions().apply {
                     accent = Theme.accentRgb()
                     showMask = ed.showMask
-                    outlineSelected = ed.tool == Tool.TRANSFORM || ed.tool == Tool.SELECT
+                    outlineSelected = (ed.tool == Tool.TRANSFORM || ed.tool == Tool.SELECT) && !gizmo.suppressed
                     if (ed.tool == Tool.SELECT) {
                         editWire = true
                         if (ed.faces.mesh === ed.scene.selected?.mesh) editSelection = ed.faces.version to ed.faces.list()

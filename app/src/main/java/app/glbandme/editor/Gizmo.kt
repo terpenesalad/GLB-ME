@@ -32,7 +32,11 @@ class Gizmo(private val ed: Editor, private val cam: OrbitCamera) {
 
     private val lengthPx get() = Theme.dp(92f)
 
+    /** Set while the interface is hidden for clean viewing. */
+    var suppressed = false
+
     fun visible(): Boolean {
+        if (suppressed) return false
         val o = ed.scene.selected ?: return false
         if (!o.visible) return false
         return when (ed.tool) {

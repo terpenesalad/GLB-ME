@@ -26,6 +26,7 @@ class Overlay(ctx: Context, private val vp: Viewport) : View(ctx) {
     val navR get() = dp(36f)
     var statsY = 0f
     var statsX = 0f
+    var hideHud = false
     private var brushX = 0f; private var brushY = 0f; private var brushR = 0f; private var brushOn = false
     private val prefs = Prefs.of(ctx)
 
@@ -70,6 +71,7 @@ class Overlay(ctx: Context, private val vp: Viewport) : View(ctx) {
             cam.update()
             drawGizmo(c)
         }
+        if (hideHud) return
         drawNavigator(c, cam)
         if (brushOn) {
             p.style = Paint.Style.STROKE
