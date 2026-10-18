@@ -31,7 +31,7 @@ jobs:
             target: --linux
             exe: release/linux-unpacked/glbandme-desktop
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: desktop
@@ -57,6 +57,7 @@ jobs:
         run: npx electron-builder ${{ matrix.target }} --publish never
 
       - name: Smoke test the packaged app (launch, open editor, save)
+        timeout-minutes: 6
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a node scripts/smoke.mjs "${{ matrix.exe }}" smoke; else node scripts/smoke.mjs "${{ matrix.exe }}" smoke; fi

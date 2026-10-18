@@ -23,6 +23,8 @@ function log(...a) {
 process.on('uncaughtException', (e) => { log('uncaught', e); try { dialog.showErrorBox('GLB&ME hit a problem', `${e && e.message}\n\nDetails were saved to:\n${logFile || 'the logs folder'}`); } catch { /* ignore */ } });
 process.on('unhandledRejection', (e) => log('unhandled rejection', e));
 let win = null;
+let quitting = false; // Cmd+Q / app.quit(): finish quitting after the project has been saved
+app.on('before-quit', () => { quitting = true; });
 let pendingOpen = [];
 const allowedFiles = new Set();
 const systemFontFiles = new Set();
@@ -57,10 +59,10 @@ function createWindow() {
     if (allowClose) return;
     e.preventDefault();
     win.webContents.send('app-closing');
-    setTimeout(() => { allowClose = true; if (win && !win.isDestroyed()) win.close(); }, 10000);
+    setTimeout(() => { allowClose = true; if (win && !win.isDestroyed()) win.close(); if (quitting) app.quit(); }, 10000);
   });
   ipcMain.removeHandler('app:closeReady');
-  ipcMain.handle('app:closeReady', () => { allowClose = true; setImmediate(() => win && !win.isDestroyed() && win.close()); });
+  ipcMain.handle('app:closeReady', () => { allowClose = true; setImmediate(() => { if (win && !win.isDestroyed()) win.close(); if (quitting) app.quit(); }); });
   win.on('closed', () => { win = null; });
   win.loadURL('app://glbandme/index.html');
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
