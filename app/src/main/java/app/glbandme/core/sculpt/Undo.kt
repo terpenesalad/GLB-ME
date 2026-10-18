@@ -50,6 +50,9 @@ class UndoManager(var maxSteps: Int = 60, var maxBytes: Long = 256L * 1024 * 102
 
     fun clear() { undoStack.clear(); redoStack.clear(); onChanged?.invoke() }
 
+    /** Remove the most recent action without undoing it (to merge composite operations). */
+    fun popLast(): UndoAction? = undoStack.removeLastOrNull()
+
     private fun trim() {
         while (undoStack.size > maxSteps) undoStack.removeFirst()
         var total = undoStack.sumOf { it.bytes }
