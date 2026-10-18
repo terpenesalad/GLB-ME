@@ -333,19 +333,21 @@ class Editor(val scene: Scene) {
     fun swapMesh(label: String, o: SceneObject, op: (Mesh) -> Mesh?, extra: (() -> Unit)? = null): Boolean {
         val old = o.mesh
         val oldPrim = o.primitive
+        val oldText = o.text
         val newMesh = locked { op(old) } ?: return false
         locked {
             o.mesh = newMesh
             o.primitive = null
+            o.text = null
             extra?.invoke()
         }
         if (tool == Tool.SELECT) faces.bind(newMesh)
         undo.push(LambdaAction(label, {
-            locked { o.mesh = old; o.primitive = oldPrim }
+            locked { o.mesh = old; o.primitive = oldPrim; o.text = oldText }
             if (tool == Tool.SELECT) faces.bind(old)
             notify(Change.TOPOLOGY, Change.EDIT_SELECTION)
         }, {
-            locked { o.mesh = newMesh; o.primitive = null }
+            locked { o.mesh = newMesh; o.primitive = null; o.text = null }
             if (tool == Tool.SELECT) faces.bind(newMesh)
             notify(Change.TOPOLOGY, Change.EDIT_SELECTION)
         }, (old.vertexCount + newMesh.vertexCount) * 48L + (old.indices.size + newMesh.indices.size) * 4L))
@@ -367,10 +369,30 @@ class Editor(val scene: Scene) {
     fun projectUvs(mode: MeshOps.UvProjection) = scene.selected?.let { o -> swapMesh("UV ${mode.label}", o, { MeshOps.projectUvs(it, mode) }) }
     fun bakePrimitive() {
         val o = scene.selected ?: return
-        val spec = o.primitive ?: return
-        locked { o.primitive = null }
-        undo.push(LambdaAction("Convert to mesh", { locked { o.primitive = spec }; notify(Change.TOPOLOGY) }, { locked { o.primitive = null }; notify(Change.TOPOLOGY) }))
+        val spec = o.primitive
+        val txt = o.text
+        if (spec == null && txt == null) return
+        locked { o.primitive = null; o.text = null }
+        undo.push(LambdaAction("Convert to mesh", { locked { o.primitive = spec; o.text = txt }; notify(Change.TOPOLOGY) }, { locked { o.primitive = null; o.text = null }; notify(Change.TOPOLOGY) }))
         notify(Change.TOPOLOGY)
+    }
+
+    /** Live text edit (no undo per keystroke; the text studio commits once). */
+    fun setTextMesh(o: SceneObject, spec: app.glbandme.core.scene.TextSpec, mesh: Mesh) {
+        locked {
+            // keep the text standing where it was: align the new bottom with the old one
+            val oldMin = o.mesh.bounds().first.y
+            val newMin = mesh.bounds().first.y
+            if (o.mesh.vertexCount > 0) o.position.y += (oldMin - newMin) * o.scale.y
+            o.mesh = mesh; o.text = spec.copy()
+        }
+        notify(Change.TOPOLOGY)
+    }
+
+    fun commitText(o: SceneObject, beforeMesh: Mesh, beforeSpec: app.glbandme.core.scene.TextSpec?, beforePos: Vec3) {
+        val afterMesh = o.mesh; val afterSpec = o.text?.copy(); val afterPos = o.position.copy()
+        undo.push(LambdaAction("Edit text", { locked { o.mesh = beforeMesh; o.text = beforeSpec?.copy(); o.position.set(beforePos) }; notify(Change.TOPOLOGY, Change.TRANSFORM) },
+            { locked { o.mesh = afterMesh; o.text = afterSpec?.copy(); o.position.set(afterPos) }; notify(Change.TOPOLOGY, Change.TRANSFORM) }))
     }
 
     /** Live primitive parameter edit (no undo per tick; caller commits). */
@@ -526,4 +548,134 @@ class Editor(val scene: Scene) {
     }
 
     fun keyFrames(o: SceneObject?): List<Int> = o?.keys?.keys?.toList() ?: emptyList()
+
+    enum class AnimPreset { SPIN, BOUNCE, FLOAT, PULSE, WOBBLE }
+
+    /** One-tap looping animations built from the object's current pose. */
+    fun presetAnimation(kind: AnimPreset) {
+        val o = scene.selected ?: return
+        if (kind == AnimPreset.SPIN) { turntable(); return }
+        val saved = o.keys.mapValues { it.value.copy() }
+        val base = o.currentKeyframe()
+        val n = scene.frameCount.coerceAtLeast(8)
+        val size = o.worldBounds().let { (a, b) -> (b - a).length().coerceAtLeast(0.05f) }
+        locked {
+            o.keys.clear()
+            when (kind) {
+                AnimPreset.BOUNCE -> {
+                    val steps = 8
+                    for (i in 0..steps) {
+                        val t = i.toFloat() / steps
+                        val h = 4f * t * (1f - t) * size * 0.6f
+                        val squash = if (i == 0 || i == steps) 0.85f else 1f
+                        val k = Keyframe(base.position.copy().also { it.y += h }, base.rotation.copy(), Vec3(base.scale.x / kotlin.math.sqrt(squash), base.scale.y * squash, base.scale.z / kotlin.math.sqrt(squash)))
+                        o.keys[(n * t).toInt()] = k
+                    }
+                }
+                AnimPreset.FLOAT -> {
+                    for (i in 0..8) {
+                        val t = i / 8f
+                        val y = kotlin.math.sin(t * 2f * Math.PI.toFloat()) * size * 0.08f
+                        val tilt = Quat.fromEulerDeg(kotlin.math.sin(t * 2f * Math.PI.toFloat()) * 4f, 0f, kotlin.math.cos(t * 2f * Math.PI.toFloat()) * 3f)
+                        o.keys[(n * t).toInt()] = Keyframe(base.position.copy().also { it.y += y }, (tilt * base.rotation).normalize(), base.scale.copy())
+                    }
+                }
+                AnimPreset.PULSE -> {
+                    for (i in 0..8) {
+                        val t = i / 8f
+                        val s = 1f + 0.08f * kotlin.math.sin(t * 4f * Math.PI.toFloat())
+                        o.keys[(n * t).toInt()] = Keyframe(base.position.copy(), base.rotation.copy(), base.scale * s)
+                    }
+                }
+                AnimPreset.WOBBLE -> {
+                    for (i in 0..12) {
+                        val t = i / 12f
+                        val a = kotlin.math.sin(t * 6f * Math.PI.toFloat()) * 12f * (1f - t)
+                        o.keys[(n * t).toInt()] = Keyframe(base.position.copy(), (Quat.fromEulerDeg(0f, 0f, a) * base.rotation).normalize(), base.scale.copy())
+                    }
+                }
+                else -> {}
+            }
+        }
+        val after = o.keys.mapValues { it.value.copy() }
+        undo.push(LambdaAction(kind.name.lowercase().replaceFirstChar { it.uppercase() }, {
+            locked { o.keys.clear(); for ((f, k) in saved) o.keys[f] = k.copy(); o.applyKeyframe(base) }; notify(Change.ANIMATION)
+        }, { locked { o.keys.clear(); for ((f, k) in after) o.keys[f] = k.copy() }; notify(Change.ANIMATION) }))
+        notify(Change.ANIMATION)
+    }
+
+    /** Colour the vertices of the selected faces with the paint colour. */
+    fun fillSelectionColor() {
+        val o = scene.selected ?: return
+        faces.bind(o.mesh)
+        val verts = faces.selectedVertices()
+        if (verts.isEmpty()) return
+        val lin = app.glbandme.core.scene.Color.hexToLinear(paintColor)
+        colorsAction("Colour faces", o) { m ->
+            val c = m.ensureColors()
+            for (v in verts) { c[v * 4] = lin[0]; c[v * 4 + 1] = lin[1]; c[v * 4 + 2] = lin[2]; c[v * 4 + 3] = 1f }
+            m.markColorsDirty()
+        }
+    }
+
+    /**
+     * Linear or radial array of the selected object: [count] total copies (including the
+     * original). Linear arrays step by [offset]; radial arrays rotate around world Y through
+     * [center] over [angleDeg].
+     */
+    fun arrayDuplicate(count: Int, offset: Vec3, radial: Boolean, angleDeg: Float, axis: Int = 1) {
+        val o = scene.selected ?: return
+        if (count < 2) return
+        val copies = ArrayList<SceneObject>()
+        locked {
+            val step = if (kotlin.math.abs(angleDeg) >= 359.9f) angleDeg / count else angleDeg / (count - 1)
+            val ax = Vec3(if (axis == 0) 1f else 0f, if (axis == 1) 1f else 0f, if (axis == 2) 1f else 0f)
+            for (i in 1 until count) {
+                val c = o.duplicate()
+                c.name = "${o.name} ${i + 1}"
+                c.keys.clear()
+                if (radial) {
+                    val q = Quat.axisAngle(ax, step * i * Math.PI.toFloat() / 180f)
+                    c.position.set(q.rotate(o.position))
+                    c.rotation.set((q * o.rotation).normalize())
+                } else c.position.set(o.position + offset * i.toFloat())
+                copies.add(c)
+            }
+        }
+        addObjects(copies, "Array ×$count")
+        select(o)
+    }
+
+    // ---- material clipboard ---------------------------------------------------------------
+    var copiedMaterial: Material? = null; private set
+
+    fun copyMaterial() { copiedMaterial = scene.selected?.material?.copy() }
+
+    fun pasteMaterial() {
+        val m = copiedMaterial ?: return
+        editMaterial("Paste material") { it.copyFrom(m) }
+    }
+
+    /** Give every visible object the selected object's material (one undo step). */
+    fun materialToAll() {
+        val src = scene.selected?.material ?: return
+        val targets = scene.objects.filter { it.visible && it !== scene.selected }
+        val before = targets.associateWith { it.material.copy() }
+        locked { for (o in targets) o.material.copyFrom(src) }
+        val after = src.copy()
+        undo.push(LambdaAction("Material to all", { locked { for ((o, m) in before) o.material.copyFrom(m) }; notify(Change.MATERIAL) },
+            { locked { for (o in targets) o.material.copyFrom(after) }; notify(Change.MATERIAL) }))
+        notify(Change.MATERIAL)
+    }
+
+    /** Scale the object so its world bounding box gets the given size on [axis]. */
+    fun setDimension(o: SceneObject, axis: Int, size: Float, uniform: Boolean) {
+        val (a, b) = o.worldBounds()
+        val cur = (b - a)[axis]
+        if (cur < 1e-7f || size <= 0f) return
+        val k = size / cur
+        val s = o.scale.copy()
+        if (uniform) s.set(s.x * k, s.y * k, s.z * k) else s[axis] = s[axis] * k
+        setTransform(o, s = s, label = "Set size")
+    }
 }

@@ -13,6 +13,7 @@ uniform mat4 uModel;
 uniform mat4 uViewProj;
 uniform mat3 uNormalMat;
 uniform mat4 uLightVP;
+uniform mat3 uUvXform;
 out vec3 vWorldPos;
 out vec3 vNormal;
 out vec4 vColor;
@@ -24,7 +25,7 @@ void main() {
     vWorldPos = wp.xyz;
     vNormal = normalize(uNormalMat * aNormal);
     vColor = aColor;
-    vUV = aUV;
+    vUV = (uUvXform * vec3(aUV, 1.0)).xy;
     vMask = aMask;
     vLightPos = uLightVP * wp;
     gl_Position = uViewProj * wp;
@@ -134,6 +135,8 @@ vec3 perturbNormal(vec3 n, vec3 pos, vec2 uv) {
     float invmax = inversesqrt(max(dot(t, t), dot(b, b)) + 1e-12);
     mat3 tbn = mat3(t * invmax, b * invmax, n);
     vec3 m = texture(uNormalTex, uv).xyz * 2.0 - 1.0;
+    // glTF normal maps are "green up" (+Y towards the image top) while b follows +v (image down)
+    m.y = -m.y;
     m.xy *= uNormalScale;
     return normalize(tbn * m);
 }

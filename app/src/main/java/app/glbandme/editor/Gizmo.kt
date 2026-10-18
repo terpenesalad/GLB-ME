@@ -274,7 +274,7 @@ class Gizmo(private val ed: Editor, private val cam: OrbitCamera) {
                     ed.notify(Change.TOPOLOGY)
                 }
                 ed.undo.push(LambdaAction("${ed.gizmoMode.label} faces", { apply(before) }, { apply(after) }, idx.size * 28L))
-                ed.locked { o.primitive = null }
+                ed.locked { o.primitive = null; o.text = null }
                 ed.notify(Change.TOPOLOGY)
             } else startKey?.let { ed.commitTransform(o, it, ed.gizmoMode.label) }
         }

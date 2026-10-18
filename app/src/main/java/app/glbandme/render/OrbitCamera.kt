@@ -15,6 +15,9 @@ class OrbitCamera(val state: CameraState) {
     var height = 1; private set
     var fovDeg = 45f
     var ortho = false
+    /** Vertical lens shift in NDC (+ moves the image up), used to keep the model visible above sheets. */
+    var shiftY = 0f
+    var shiftX = 0f
     val view = FloatArray(16)
     val proj = FloatArray(16)
     val viewProj = FloatArray(16)
@@ -43,6 +46,8 @@ class OrbitCamera(val state: CameraState) {
             val hh = d * tan(fovDeg * MathUtil.DEG / 2f)
             Mat4.ortho(-hh * aspect, hh * aspect, -hh, hh, -far, far, proj)
         } else Mat4.perspective(fovDeg * MathUtil.DEG, aspect, near, far, proj)
+        if (shiftY != 0f) { if (ortho) proj[13] += shiftY else proj[9] -= shiftY }
+        if (shiftX != 0f) { if (ortho) proj[12] += shiftX else proj[8] -= shiftX }
         Mat4.mul(proj, view, viewProj)
         Mat4.invert(viewProj, invViewProj)
     }

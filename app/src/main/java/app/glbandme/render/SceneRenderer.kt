@@ -147,6 +147,7 @@ class SceneRenderer {
             val px = ByteBuffer.allocateDirect(4).order(ByteOrder.nativeOrder())
             px.put(byteArrayOf(-1, 0, -1, -1)).position(0)
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, px)
+            glGenerateMipmap(GL_TEXTURE_2D)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         }
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
@@ -401,6 +402,8 @@ class SceneRenderer {
         if (frame % 120L == 0L) collectGarbage()
     }
 
+    private val uvMat = FloatArray(9)
+
     private fun drawMesh(o: SceneObject, opt: RenderOptions, blend: Boolean) {
         val m = o.material
         o.localMatrix(model)
@@ -418,10 +421,16 @@ class SceneRenderer {
         p.set1i("uFlat", 0)
         val g = gpu(o.mesh)
         p.set1i("uUseVertexColor", if (g.hasColors) 1 else 0)
+        p.setMat3("uUvXform", m.uvMatrix(uvMat))
         fun bind(unit: Int, t: Texture?, flag: String): Boolean {
             val id = if (g.hasUvs) texture(t) else 0
             p.set1i(flag, if (id != 0) 1 else 0)
-            if (id != 0) { glActiveTexture(GL_TEXTURE0 + unit); glBindTexture(GL_TEXTURE_2D, id) }
+            if (id != 0) {
+                glActiveTexture(GL_TEXTURE0 + unit); glBindTexture(GL_TEXTURE_2D, id)
+                // sampling mode is a material property (pixel-art vs smooth)
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, if (m.pixelated) GL_NEAREST_MIPMAP_NEAREST else GL_LINEAR_MIPMAP_LINEAR)
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, if (m.pixelated) GL_NEAREST else GL_LINEAR)
+            }
             return id != 0
         }
         bind(0, m.baseColorTexture, "uHasBaseTex")

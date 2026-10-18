@@ -23,6 +23,8 @@ class Overlay(ctx: Context, private val vp: Viewport) : View(ctx) {
     private val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; typeface = Theme.bold }
     private val path = Path()
     var navCx = 0f
+        get() = field + navShiftX
+    var navShiftX = 0f
     var navCy = 0f
     val navR get() = dp(36f)
     var statsY = 0f

@@ -29,11 +29,18 @@ class Material(
     var occlusionTexture: Texture? = null,
     var occlusionStrength: Float = 1f,
     var emissiveTexture: Texture? = null,
+    /** Texture tiling (KHR_texture_transform), shared by all slots. */
+    val uvScale: FloatArray = floatArrayOf(1f, 1f),
+    val uvOffset: FloatArray = floatArrayOf(0f, 0f),
+    /** degrees, counter-clockwise */
+    var uvRotation: Float = 0f,
+    /** Nearest-neighbour sampling (pixel art) */
+    var pixelated: Boolean = false,
 ) {
     fun copy(): Material = Material(
         name, baseColor.copyOf(), metallic, roughness, emissive.copyOf(), emissiveStrength, alphaMode, alphaCutoff,
         doubleSided, unlit, baseColorTexture, metallicRoughnessTexture, normalTexture, normalScale,
-        occlusionTexture, occlusionStrength, emissiveTexture
+        occlusionTexture, occlusionStrength, emissiveTexture, uvScale.copyOf(), uvOffset.copyOf(), uvRotation, pixelated
     )
 
     fun copyFrom(o: Material) {
@@ -44,6 +51,22 @@ class Material(
         baseColorTexture = o.baseColorTexture; metallicRoughnessTexture = o.metallicRoughnessTexture
         normalTexture = o.normalTexture; normalScale = o.normalScale
         occlusionTexture = o.occlusionTexture; occlusionStrength = o.occlusionStrength; emissiveTexture = o.emissiveTexture
+        o.uvScale.copyInto(uvScale); o.uvOffset.copyInto(uvOffset); uvRotation = o.uvRotation; pixelated = o.pixelated
+    }
+
+    fun hasUvTransform() = uvScale[0] != 1f || uvScale[1] != 1f || uvOffset[0] != 0f || uvOffset[1] != 0f || uvRotation != 0f
+
+    fun resetUvTransform() { uvScale[0] = 1f; uvScale[1] = 1f; uvOffset[0] = 0f; uvOffset[1] = 0f; uvRotation = 0f }
+
+    /** Column-major 3x3 matrix: uv' = T * R * S * uv (KHR_texture_transform order). */
+    fun uvMatrix(out: FloatArray = FloatArray(9)): FloatArray {
+        val r = Math.toRadians(uvRotation.toDouble())
+        val c = kotlin.math.cos(r).toFloat(); val s = kotlin.math.sin(r).toFloat()
+        val sx = uvScale[0]; val sy = uvScale[1]
+        out[0] = sx * c; out[1] = -sx * s; out[2] = 0f
+        out[3] = sy * s; out[4] = sy * c; out[5] = 0f
+        out[6] = uvOffset[0]; out[7] = uvOffset[1]; out[8] = 1f
+        return out
     }
 
     fun textures(): List<Texture> = listOfNotNull(baseColorTexture, metallicRoughnessTexture, normalTexture, occlusionTexture, emissiveTexture)

@@ -31,12 +31,14 @@ object HelpSheet {
         }
         body.addView(act.label("Tips", 13f, Theme.TEXT_MUTED, bold = true).apply { setPadding(0, dp(16), 0, dp(8)) })
         for (tip in listOf(
-            "The left sliders set brush Radius and Intensity. The minus button inverts the brush (dig instead of add).",
-            "Symmetry (X) mirrors every stroke across the model's center.",
-            "Mask protects areas from sculpting – paint it with the Mask tool, then Invert / Blur from the bottom bar.",
-            "Shapes stay editable (size, segments…) in the Scene panel until you sculpt them.",
-            "Everything is saved as GLB with your editor state, so projects reopen exactly as you left them.",
-            "Export to GLB, glTF, OBJ, STL or PLY from the ⋮ menu – or share directly to other apps.",
+            "The bar at the bottom switches modes: Object (move & arrange), Sculpt, Paint, Edit (faces) and Animate. The strip above it only shows tools for that mode.",
+            "The buttons on the side open Layers, Add, Inspect (object, material, mesh) and View. Drag a panel's handle to make it taller, or swipe it down to close.",
+            "Add › 3D Text lets you type, choose a font – including your own .ttf / .otf files – and adjust depth and bevel live.",
+            "Add › Draw turns a finger drawing into a 3D shape: extrude it, revolve it into a vase, or sweep a tube.",
+            "Inspect › Material has photos, built-in seamless textures, stickers and tiling controls. To texture only part of a model, select faces in Edit mode and tap Material.",
+            "In Sculpt, the side sliders set brush size and strength; the minus button digs in instead of building up. Mirror symmetry is on by default.",
+            "Shapes and text stay adjustable in Inspect until you sculpt or edit them.",
+            "Export creates GLB, glTF, USDZ (AR Quick Look), OBJ, STL or PLY with presets for games, web, AR and 3D printing.",
         )) body.addView(act.label("•  $tip", 13.5f, Theme.TEXT_DIM).apply { setPadding(0, dp(4), 0, dp(4)); setLineSpacing(0f, 1.2f) })
         body.addView(act.label("GLB&ME – every feature unlocked, no account, works offline.", 12f, Theme.TEXT_MUTED).apply { gravity = Gravity.CENTER; setPadding(0, dp(18), 0, 0) })
         Dialogs.custom(act, "How to use GLB&ME", body, "Got it", null)

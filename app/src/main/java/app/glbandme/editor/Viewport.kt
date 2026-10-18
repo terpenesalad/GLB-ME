@@ -43,6 +43,16 @@ class Viewport(ctx: Context, val ed: Editor, msaa: Boolean) : GLSurfaceView(ctx)
     @Volatile var captureSize = 0
     @Volatile var captureTransparent = false
     private val prefs = Prefs.of(ctx)
+    /** NDC lens shift shared by the UI and GL cameras (sheet-aware framing). */
+    @Volatile var viewShiftY = 0f
+        set(v) { field = v; uiCam.shiftY = v; requestRender() }
+    @Volatile var viewShiftX = 0f
+        set(v) { field = v; uiCam.shiftX = v; requestRender() }
+    /**
+     * One-shot tap handler for placement modes (stickers, text...). Return true to consume the tap.
+     * Receives the scene hit (or null) and the screen position.
+     */
+    var tapInterceptor: ((Picking.SceneHit?, Float, Float) -> Boolean)? = null
 
     init {
         setEGLContextClientVersion(3)
@@ -59,6 +69,7 @@ class Viewport(ctx: Context, val ed: Editor, msaa: Boolean) : GLSurfaceView(ctx)
             }
 
             override fun onDrawFrame(gl: GL10?) {
+                glCam.shiftY = viewShiftY; glCam.shiftX = viewShiftX
                 val opt = RenderOptions().apply {
                     accent = Theme.accentRgb()
                     showMask = ed.showMask
@@ -139,14 +150,15 @@ class Viewport(ctx: Context, val ed: Editor, msaa: Boolean) : GLSurfaceView(ctx)
                 mode = Mode.ORBIT
                 if (ov != null && ov.navigatorHit(e.x, e.y) != null) { mode = Mode.NAVIGATOR; return true }
                 val isStylus = e.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS
-                val handle = synchronized(ed.scene) { gizmo.hit(e.x, e.y) }
+                val placing = tapInterceptor != null
+                val handle = if (placing) Gizmo.NONE else synchronized(ed.scene) { gizmo.hit(e.x, e.y) }
                 if (handle != Gizmo.NONE) {
                     synchronized(ed.scene) { gizmo.begin(handle, e.x, e.y) }
                     mode = Mode.GIZMO
                     ov?.invalidate()
                     return true
                 }
-                val canStroke = (ed.tool.isBrush || ed.tool == Tool.SELECT) && (!prefs.stylusOnly || isStylus)
+                val canStroke = !placing && (ed.tool.isBrush || ed.tool == Tool.SELECT) && (!prefs.stylusOnly || isStylus)
                 if (canStroke && stroke.begin(e.x, e.y, pressure(e, 0))) {
                     mode = Mode.STROKE
                     ov?.brush(e.x, e.y, stroke.radiusPx, true)
@@ -251,8 +263,9 @@ class Viewport(ctx: Context, val ed: Editor, msaa: Boolean) : GLSurfaceView(ctx)
         val now = SystemClock.uptimeMillis()
         val dbl = now - lastTapTime < 320 && hypot(x - lastTapX, y - lastTapY) < Theme.dp(40f)
         lastTapTime = now; lastTapX = x; lastTapY = y
-        if (dbl) { frameSelection(); return }
         val hit = synchronized(ed.scene) { val (o, d) = uiCam.ray(x, y); Picking.pick(ed.scene, o, d) }
+        tapInterceptor?.let { if (it(hit, x, y)) return }
+        if (dbl) { frameSelection(); return }
         when {
             hit != null && hit.obj !== ed.scene.selected -> ed.select(hit.obj)
             hit == null && ed.tool == Tool.TRANSFORM -> ed.select(null)

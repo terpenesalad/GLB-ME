@@ -14,7 +14,11 @@ enum class Icon {
     ICOSPHERE, TEXT, IMAGE, MOVE, ROTATE, SCALE, SELECT, CLAY, DRAW, INFLATE, SMOOTH, FLATTEN, PINCH, CREASE,
     GRAB, DRAG, LAYER, MASK, PAINT, SYMMETRY, WIREFRAME, GRID, FOCUS, PALETTE, SUN, STAR, FOLDER, SORT, INFO,
     EXTRUDE, MAGIC, SUBDIVIDE, DECIMATE, MIRROR, FLIP, GLOBE, FLOOR, CENTER, RESET, LINK, CHEVRON_DOWN, CHEVRON_RIGHT,
-    PEN, FILL, INVERT, BLUR, SEPARATE, AUTO, LIGHT, SHADOW, ORTHO, ROTATE_VIEW, HELP, DICE, SPARKLE
+    PEN, FILL, INVERT, BLUR, SEPARATE, AUTO, LIGHT, SHADOW, ORTHO, ROTATE_VIEW, HELP, DICE, SPARKLE,
+    SLIDERS, STICKER, RULER, TEXTURE, ARRAY, CURVE, HEART, GEAR, ARROW, SPRING, KNOT, STAIRS, ARCH, GEM, TERRAIN,
+    DOME, WEDGE, PRISM, ROUNDED_BOX, FONT, BOLD, ITALIC, ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT, BULB, SPOT,
+    LATHE, POLYGON, HAND, SEARCH, CLOCK, OBJECT, BRUSH, CHECKERBOARD, TILE, REPEAT, WAND, DOWNLOAD, UPLOAD, CUBE_PLUS,
+    ACCESSIBILITY, TEXT_SIZE, LEFT_HAND, MOTION, VIBRATE, CONTRAST, SPARKLES
 }
 
 /** Hand-drawn stroke icon set on a 24-unit grid. */
@@ -179,6 +183,53 @@ object Icons {
             Icon.SHADOW -> { circle(10f, 9f, 5f); oval(13f, 18.5f, 7f, 2f) }
             Icon.ORTHO -> { rrect(4f, 4f, 20f, 20f, 1f); rrect(8f, 8f, 16f, 16f, 1f) }
             Icon.DICE -> { rrect(4f, 4f, 20f, 20f, 3f); dot(8.5f, 8.5f, 1.4f); dot(15.5f, 15.5f, 1.4f); dot(12f, 12f, 1.4f) }
+            Icon.SLIDERS -> { line(4f, 7f, 20f, 7f); line(4f, 12f, 20f, 12f); line(4f, 17f, 20f, 17f); dot(9f, 7f, 2.4f); dot(15f, 12f, 2.4f); dot(7f, 17f, 2.4f) }
+            Icon.STICKER -> { path.reset(); path.moveTo(4f, 6f); path.quadTo(4f, 4f, 6f, 4f); path.lineTo(18f, 4f); path.quadTo(20f, 4f, 20f, 6f); path.lineTo(20f, 13f); path.lineTo(13f, 20f); path.lineTo(6f, 20f); path.quadTo(4f, 20f, 4f, 18f); path.close(); drawPath(path, stroke); poly(false, 20f, 13f, 15f, 13f, 13f, 15f, 13f, 20f); dot(9f, 9.5f, 1.2f); dot(14f, 9.5f, 1.2f) }
+            Icon.RULER -> { poly(true, 3f, 15f, 15f, 3f, 21f, 9f, 9f, 21f); line(7f, 11f, 9f, 13f); line(10f, 8f, 12.5f, 10.5f); line(13f, 5f, 15f, 7f) }
+            Icon.TEXTURE, Icon.CHECKERBOARD -> { rrect(4f, 4f, 20f, 20f, 2f); frrect(4.5f, 4.5f, 12f, 12f, 1f); frrect(12f, 12f, 19.5f, 19.5f, 1f) }
+            Icon.ARRAY -> { rrect(3f, 8f, 8f, 13f, 1f); rrect(9.5f, 8f, 14.5f, 13f, 1f); rrect(16f, 8f, 21f, 13f, 1f); line(3f, 17f, 21f, 17f); arrowHead(21f, 17f, 0f, 3f) }
+            Icon.CURVE -> { path.reset(); path.moveTo(4f, 19f); path.cubicTo(4f, 6f, 20f, 18f, 20f, 5f); drawPath(path, stroke); dot(4f, 19f, 1.8f); dot(20f, 5f, 1.8f) }
+            Icon.HEART -> { path.reset(); path.moveTo(12f, 20f); path.cubicTo(3f, 14f, 2f, 8f, 6.5f, 5.5f); path.cubicTo(9f, 4.2f, 11f, 5.5f, 12f, 7.5f); path.cubicTo(13f, 5.5f, 15f, 4.2f, 17.5f, 5.5f); path.cubicTo(22f, 8f, 21f, 14f, 12f, 20f); path.close(); drawPath(path, stroke) }
+            Icon.GEAR -> { circle(12f, 12f, 3f); path.reset(); for (i in 0 until 8) { val a0 = i * Math.PI / 4 - 0.25; val a1 = i * Math.PI / 4 + 0.25; val a2 = (i + 1) * Math.PI / 4 - 0.25; if (i == 0) path.moveTo(12f + (cos(a0) * 9f).toFloat(), 12f + (sin(a0) * 9f).toFloat()); path.lineTo(12f + (cos(a1) * 9f).toFloat(), 12f + (sin(a1) * 9f).toFloat()); path.lineTo(12f + (cos(a1 + 0.12) * 6.8f).toFloat(), 12f + (sin(a1 + 0.12) * 6.8f).toFloat()); path.lineTo(12f + (cos(a2 - 0.12) * 6.8f).toFloat(), 12f + (sin(a2 - 0.12) * 6.8f).toFloat()); path.lineTo(12f + (cos(a2) * 9f).toFloat(), 12f + (sin(a2) * 9f).toFloat()) }; path.close(); drawPath(path, stroke) }
+            Icon.ARROW -> poly(true, 3f, 9.5f, 13f, 9.5f, 13f, 5f, 21f, 12f, 13f, 19f, 13f, 14.5f, 3f, 14.5f)
+            Icon.SPRING -> { path.reset(); path.moveTo(6f, 3f); for (i in 0 until 4) { val y = 3f + i * 4.5f; path.cubicTo(20f, y, 20f, y + 2.25f, 12f, y + 2.25f); path.cubicTo(4f, y + 2.25f, 4f, y + 4.5f, 18f, y + 4.5f) }; drawPath(path, stroke) }
+            Icon.KNOT -> { path.reset(); path.moveTo(12f, 4f); path.cubicTo(22f, 4f, 20f, 16f, 12f, 19f); path.cubicTo(4f, 16f, 2f, 4f, 12f, 4f); drawPath(path, stroke); oval(12f, 12.5f, 6.5f, 3.5f) }
+            Icon.STAIRS -> poly(false, 3f, 20f, 3f, 16f, 8f, 16f, 8f, 12f, 13f, 12f, 13f, 8f, 18f, 8f, 18f, 4f, 21f, 4f, 21f, 20f, 3f, 20f)
+            Icon.ARCH -> { path.reset(); path.moveTo(3f, 20f); path.lineTo(3f, 4f); path.lineTo(21f, 4f); path.lineTo(21f, 20f); path.lineTo(16f, 20f); path.lineTo(16f, 13f); path.arcTo(RectF(8f, 9f, 16f, 17f), 0f, -180f); path.lineTo(8f, 20f); path.close(); drawPath(path, stroke) }
+            Icon.GEM -> { poly(true, 7f, 4f, 17f, 4f, 21f, 9f, 12f, 20.5f, 3f, 9f); line(3f, 9f, 21f, 9f); poly(false, 7f, 4f, 9.5f, 9f, 12f, 20.5f, 14.5f, 9f, 17f, 4f) }
+            Icon.TERRAIN -> { poly(false, 2.5f, 19f, 8f, 9f, 11.5f, 14f, 15f, 6f, 21.5f, 19f); line(2.5f, 19f, 21.5f, 19f); poly(false, 13.2f, 10f, 15f, 11.5f, 16.8f, 10f) }
+            Icon.DOME -> { arc(12f, 17f, 8.5f, 180f, 180f); oval(12f, 17f, 8.5f, 2.5f) }
+            Icon.WEDGE -> { poly(true, 3f, 18f, 15f, 18f, 15f, 6f); poly(false, 15f, 6f, 21f, 9f, 21f, 15f, 15f, 18f) }
+            Icon.PRISM -> { poly(true, 7f, 5f, 17f, 5f, 21f, 9f, 17f, 13f, 7f, 13f, 3f, 9f); line(3f, 9f, 3f, 16f); line(21f, 9f, 21f, 16f); poly(false, 3f, 16f, 7f, 20f, 17f, 20f, 21f, 16f); line(7f, 13f, 7f, 20f); line(17f, 13f, 17f, 20f) }
+            Icon.ROUNDED_BOX -> { rrect(4f, 6f, 18f, 20f, 4f); poly(false, 6.5f, 6f, 9.5f, 3.5f, 17f, 3.5f, 20.5f, 6.5f, 20.5f, 14f, 18f, 17f) }
+            Icon.FONT -> { poly(false, 4f, 20f, 10f, 4f, 16f, 20f); line(6.3f, 14f, 13.7f, 14f); line(17f, 20f, 21f, 20f) }
+            Icon.BOLD -> { path.reset(); path.moveTo(7f, 4f); path.lineTo(13f, 4f); path.quadTo(17f, 4f, 17f, 8f); path.quadTo(17f, 11.5f, 13f, 11.5f); path.lineTo(7f, 11.5f); path.moveTo(7f, 11.5f); path.lineTo(14f, 11.5f); path.quadTo(18.5f, 11.5f, 18.5f, 15.8f); path.quadTo(18.5f, 20f, 14f, 20f); path.lineTo(7f, 20f); path.close(); stroke.strokeWidth *= 1.4f; drawPath(path, stroke); stroke.strokeWidth /= 1.4f }
+            Icon.ITALIC -> { line(10f, 4f, 18f, 4f); line(6f, 20f, 14f, 20f); line(14f, 4f, 10f, 20f) }
+            Icon.ALIGN_LEFT -> { line(4f, 6f, 20f, 6f); line(4f, 10f, 14f, 10f); line(4f, 14f, 20f, 14f); line(4f, 18f, 12f, 18f) }
+            Icon.ALIGN_CENTER -> { line(4f, 6f, 20f, 6f); line(7f, 10f, 17f, 10f); line(4f, 14f, 20f, 14f); line(8f, 18f, 16f, 18f) }
+            Icon.ALIGN_RIGHT -> { line(4f, 6f, 20f, 6f); line(10f, 10f, 20f, 10f); line(4f, 14f, 20f, 14f); line(12f, 18f, 20f, 18f) }
+            Icon.BULB -> { path.reset(); path.moveTo(9f, 17f); path.lineTo(9f, 14.5f); path.cubicTo(5f, 12f, 5f, 3.5f, 12f, 3.5f); path.cubicTo(19f, 3.5f, 19f, 12f, 15f, 14.5f); path.lineTo(15f, 17f); path.close(); drawPath(path, stroke); line(9.5f, 20f, 14.5f, 20f) }
+            Icon.SPOT -> { poly(true, 9f, 3f, 15f, 3f, 16f, 9f, 8f, 9f); poly(false, 8f, 9f, 3f, 20f); poly(false, 16f, 9f, 21f, 20f); oval(12f, 20f, 9f, 1.5f) }
+            Icon.LATHE -> { line(12f, 3f, 12f, 21f); path.reset(); path.moveTo(12f, 4f); path.cubicTo(20f, 6f, 15f, 12f, 19f, 20f); drawPath(path, stroke); arc(12f, 20f, 7f, 20f, 140f) }
+            Icon.POLYGON -> { poly(true, 12f, 3.5f, 20.5f, 9.5f, 17.5f, 20f, 6.5f, 20f, 3.5f, 9.5f); dot(12f, 3.5f, 1.6f); dot(20.5f, 9.5f, 1.6f); dot(17.5f, 20f, 1.6f); dot(6.5f, 20f, 1.6f); dot(3.5f, 9.5f, 1.6f) }
+            Icon.HAND -> { path.reset(); path.moveTo(7f, 13f); path.lineTo(7f, 6f); path.moveTo(10f, 12f); path.lineTo(10f, 4f); path.moveTo(13f, 12f); path.lineTo(13f, 4.5f); path.moveTo(16f, 12.5f); path.lineTo(16f, 7f); drawPath(path, stroke); path.reset(); path.moveTo(7f, 12f); path.lineTo(5f, 10.5f); path.quadTo(2.5f, 11.5f, 4.5f, 14.5f); path.lineTo(8.5f, 20f); path.lineTo(15f, 20f); path.quadTo(16.5f, 17f, 16.5f, 12f); drawPath(path, stroke) }
+            Icon.SEARCH -> { circle(10.5f, 10.5f, 6.5f); line(15.5f, 15.5f, 20.5f, 20.5f) }
+            Icon.CLOCK -> { circle(12f, 12f, 8.5f); poly(false, 12f, 7f, 12f, 12f, 15.5f, 14f) }
+            Icon.OBJECT -> { cube(); }
+            Icon.BRUSH -> { path.reset(); path.moveTo(20f, 4f); path.lineTo(11f, 13f); drawPath(path, stroke); path.reset(); path.moveTo(11f, 13f); path.quadTo(7f, 12f, 6f, 16f); path.quadTo(5.5f, 19f, 3.5f, 20f); path.quadTo(9f, 21f, 11f, 18f); path.quadTo(12.5f, 15.5f, 11f, 13f); drawPath(path, stroke) }
+            Icon.TILE -> { rrect(3.5f, 3.5f, 20.5f, 20.5f, 1.5f); line(3.5f, 9.2f, 20.5f, 9.2f); line(3.5f, 14.8f, 20.5f, 14.8f); line(9f, 3.5f, 9f, 9.2f); line(15f, 3.5f, 15f, 9.2f); line(12f, 9.2f, 12f, 14.8f); line(9f, 14.8f, 9f, 20.5f); line(15f, 14.8f, 15f, 20.5f) }
+            Icon.REPEAT -> { path.reset(); path.moveTo(5f, 11f); path.lineTo(5f, 9f); path.quadTo(5f, 6f, 8f, 6f); path.lineTo(19f, 6f); drawPath(path, stroke); arrowHead(19f, 6f, 0f, 3f); path.reset(); path.moveTo(19f, 13f); path.lineTo(19f, 15f); path.quadTo(19f, 18f, 16f, 18f); path.lineTo(5f, 18f); drawPath(path, stroke); arrowHead(5f, 18f, 180f, 3f) }
+            Icon.WAND -> { line(4f, 20f, 14f, 10f); poly(true, 17f, 3f, 18f, 6f, 21f, 7f, 18f, 8f, 17f, 11f, 16f, 8f, 13f, 7f, 16f, 6f) }
+            Icon.DOWNLOAD -> { line(12f, 3.5f, 12f, 15f); poly(false, 7.5f, 10.5f, 12f, 15f, 16.5f, 10.5f); line(5f, 20f, 19f, 20f) }
+            Icon.UPLOAD -> { line(12f, 15f, 12f, 3.5f); poly(false, 7.5f, 8f, 12f, 3.5f, 16.5f, 8f); line(5f, 20f, 19f, 20f) }
+            Icon.CUBE_PLUS -> { poly(true, 10f, 4f, 16f, 7.5f, 16f, 14.5f, 10f, 18f, 4f, 14.5f, 4f, 7.5f); poly(false, 4f, 7.5f, 10f, 11f, 16f, 7.5f); line(10f, 11f, 10f, 18f); line(19f, 15f, 19f, 21f); line(16f, 18f, 22f, 18f) }
+            Icon.ACCESSIBILITY -> { circle(12f, 12f, 9f); dot(12f, 7f, 1.5f); poly(false, 7f, 9.5f, 12f, 10.5f, 17f, 9.5f); poly(false, 12f, 10.5f, 12f, 14f, 9.5f, 18f); line(12f, 14f, 14.5f, 18f) }
+            Icon.TEXT_SIZE -> { poly(false, 3f, 19f, 8f, 6f, 13f, 19f); line(4.7f, 14.5f, 11.3f, 14.5f); poly(false, 13f, 19f, 17f, 10f, 21f, 19f); line(14.3f, 16f, 19.7f, 16f) }
+            Icon.LEFT_HAND -> { save(); scale(-1f, 1f, 12f, 12f); render(this, Icon.HAND); restore() }
+            Icon.MOTION -> { circle(15f, 12f, 5f); line(3f, 9f, 8f, 9f); line(4.5f, 12f, 9f, 12f); line(3f, 15f, 8f, 15f) }
+            Icon.VIBRATE -> { rrect(8f, 4f, 16f, 20f, 2f); poly(false, 4.5f, 8f, 3f, 10f, 4.5f, 12f, 3f, 14f, 4.5f, 16f); poly(false, 19.5f, 8f, 21f, 10f, 19.5f, 12f, 21f, 14f, 19.5f, 16f) }
+            Icon.CONTRAST -> { circle(12f, 12f, 8.5f); path.reset(); path.moveTo(12f, 3.5f); path.arcTo(RectF(3.5f, 3.5f, 20.5f, 20.5f), -90f, 180f); path.close(); drawPath(path, fill) }
+            Icon.SPARKLES -> { poly(true, 10f, 3f, 11.6f, 8.4f, 17f, 10f, 11.6f, 11.6f, 10f, 17f, 8.4f, 11.6f, 3f, 10f, 8.4f, 8.4f); poly(true, 17.5f, 14f, 18.3f, 16.7f, 21f, 17.5f, 18.3f, 18.3f, 17.5f, 21f, 16.7f, 18.3f, 14f, 17.5f, 16.7f, 16.7f) }
         }
     }
 }

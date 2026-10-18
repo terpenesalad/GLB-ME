@@ -105,6 +105,7 @@ class SculptEngine {
         type = brush
         settings.copyFrom(s)
         o.primitive = null // procedural shape becomes a sculpt
+        if (brush.sculpts) o.text = null
         val vc = m.vertexCount
         // Reuse topology caches and the spatial grid when sculpting the same mesh again and
         // nothing else moved its vertices since our last stroke (keeps stroke start instant).

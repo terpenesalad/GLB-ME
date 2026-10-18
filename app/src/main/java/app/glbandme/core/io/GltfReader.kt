@@ -146,6 +146,7 @@ class GltfReader(private val resolver: ((String) -> ByteArray?)? = null) {
                 o.visible = ex.b("visible", true)
                 o.locked = ex.b("locked", false)
                 if (ex.b("flat")) m.flatShading = true
+                ex.o("text")?.let { o.text = app.glbandme.core.scene.TextSpec.fromMap(it) }
                 ex.o("primitive")?.let { ps ->
                     val type = runCatching { PrimType.valueOf(ps.s("type") ?: "") }.getOrNull()
                     if (type != null) {
@@ -228,6 +229,19 @@ class GltfReader(private val resolver: ((String) -> ByteArray?)? = null) {
         mat.alphaMode = when (m.s("alphaMode")) { "BLEND" -> AlphaMode.BLEND; "MASK" -> AlphaMode.MASK; else -> AlphaMode.OPAQUE }
         mat.alphaCutoff = m.f("alphaCutoff", 0.5f)
         mat.doubleSided = m.b("doubleSided")
+        // tiling: take the transform of the first textured slot (GLB&ME shares one per material)
+        val firstRef = pbr?.o("baseColorTexture") ?: m.o("normalTexture") ?: m.o("emissiveTexture") ?: pbr?.o("metallicRoughnessTexture") ?: m.o("occlusionTexture")
+        firstRef?.o("extensions")?.o("KHR_texture_transform")?.let { tt ->
+            tt.floats("offset")?.let { if (it.size == 2) it.copyInto(mat.uvOffset) }
+            tt.floats("scale")?.let { if (it.size == 2) it.copyInto(mat.uvScale) }
+            mat.uvRotation = Math.toDegrees(tt.f("rotation", 0f).toDouble()).toFloat()
+            if (tt.iOrNull("texCoord") != null && tt.i("texCoord") != 0) warnings.add("A texture transform uses a second UV set; it may look wrong.")
+        }
+        firstRef?.iOrNull("index")?.let { ti ->
+            val samplerIdx = root.a("textures")?.getOrNull(ti).obj()?.iOrNull("sampler")
+            val sampler = samplerIdx?.let { root.a("samplers")?.getOrNull(it).obj() }
+            if (sampler != null && sampler.i("magFilter", 9729) == 9728) mat.pixelated = true
+        }
         val ext = m.o("extensions")
         if (ext?.containsKey("KHR_materials_unlit") == true) mat.unlit = true
         ext?.o("KHR_materials_emissive_strength")?.let { mat.emissiveStrength = it.f("emissiveStrength", 1f) }

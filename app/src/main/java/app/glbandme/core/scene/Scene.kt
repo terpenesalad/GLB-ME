@@ -26,6 +26,8 @@ class SceneObject(
     var locked = false
     /** Still procedural (editable parameters) until baked by sculpting/topology edits. */
     var primitive: PrimitiveSpec? = null
+    /** 3D text parameters (editable until the mesh is sculpted / edited). */
+    var text: TextSpec? = null
     /** frame -> transform */
     val keys = TreeMap<Int, Keyframe>()
 
@@ -59,6 +61,7 @@ class SceneObject(
         o.position.set(position); o.rotation.set(rotation); o.scale.set(scale)
         o.visible = visible
         o.primitive = primitive?.copy()
+        o.text = text?.copy()
         for ((f, k) in keys) o.keys[f] = k.copy()
         return o
     }

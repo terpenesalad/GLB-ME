@@ -29,7 +29,7 @@ import app.glbandme.ui.vbox
 
 /** Viewport look: shading, matcaps, lights, environment, background, camera. */
 class RenderPanel(act: EditorActivity) : Panel(act) {
-    override val title = "Render"
+    override val title = "View"
     override val icon = Icon.RENDER
     override val rebuildOn = setOf(Change.RENDER, Change.UNDO)
     private var dragging = false

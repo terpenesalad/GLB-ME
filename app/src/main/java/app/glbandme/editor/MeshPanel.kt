@@ -81,10 +81,7 @@ class MeshPanel(act: EditorActivity) : Panel(act) {
         return root
     }
 
-    private fun heavy(msg: String, work: () -> Unit) {
-        val d = Dialogs.progress(act, msg)
-        (act as BaseActivity).async({ work() }, onError = { d.dismiss(); act.showError(it) }) { d.dismiss() }
-    }
+    private fun heavy(msg: String, work: () -> Unit) = act.heavy(msg, work)
 
     private fun symmetrizeMenu() {
         Dialogs.menu(act, "Symmetrize", listOf(

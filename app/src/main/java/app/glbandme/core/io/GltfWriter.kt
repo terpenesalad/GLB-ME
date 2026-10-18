@@ -20,7 +20,11 @@ class GltfExportOptions(
     var animations: Boolean = true,
     /** Editor data (mask, primitive params, camera) for project files. */
     var projectData: Boolean = false,
-    var generator: String = "GLB&ME"
+    var generator: String = "GLB&ME",
+    /** Embed textures (false = materials keep factors only). */
+    var textures: Boolean = true,
+    /** Optional re-encoder (resize / format change) applied once per image on export. */
+    var textureFilter: ((Texture) -> Pair<ByteArray, String>)? = null,
 )
 
 /** glTF 2.0 writer (.glb or .gltf with embedded buffers). */
@@ -52,6 +56,7 @@ object GltfWriter {
                 ex["visible"] = o.visible
                 if (o.locked) ex["locked"] = true
                 o.primitive?.let { ex["primitive"] = mapOf("type" to it.type.name, "params" to it.params.toMap()) }
+                o.text?.let { ex["text"] = it.toMap() }
                 if (o.mesh.flatShading) ex["flat"] = true
                 node["extras"] = mapOf("glbandme" to ex)
             }
@@ -76,7 +81,10 @@ object GltfWriter {
         if (w.textures.isNotEmpty()) {
             root["textures"] = w.textures
             root["images"] = w.images
-            root["samplers"] = listOf(mapOf("magFilter" to 9729, "minFilter" to 9987, "wrapS" to 10497, "wrapT" to 10497))
+            root["samplers"] = listOf(
+                mapOf("magFilter" to 9729, "minFilter" to 9987, "wrapS" to 10497, "wrapT" to 10497),
+                mapOf("magFilter" to 9728, "minFilter" to 9984, "wrapS" to 10497, "wrapT" to 10497)
+            )
         }
         if (w.animations.isNotEmpty()) root["animations"] = w.animations
         root["accessors"] = w.accessors
@@ -210,19 +218,37 @@ object GltfWriter {
             return true
         }
 
-        private fun texRef(t: Texture?, extra: Map<String, Any?> = emptyMap()): Map<String, Any?>? {
-            if (t == null) return null
-            val idx = textureIndex.getOrPut(t.uid) {
-                val view = view(t.bytes)
-                images.add(mapOf("name" to t.name, "bufferView" to view, "mimeType" to t.mimeType))
-                if (t.mimeType == "image/webp") extensionsUsed.add("EXT_texture_webp")
-                val tex = if (t.mimeType == "image/webp")
-                    mapOf("sampler" to 0, "extensions" to mapOf("EXT_texture_webp" to mapOf("source" to images.size - 1)))
-                else mapOf("sampler" to 0, "source" to images.size - 1)
+        private val imageIndex = HashMap<Long, Int>()
+
+        private fun texRef(t: Texture?, m: Material, extra: Map<String, Any?> = emptyMap()): Map<String, Any?>? {
+            if (t == null || !opt.textures) return null
+            val sampler = if (m.pixelated) 1 else 0
+            val img = imageIndex.getOrPut(t.uid) {
+                val (bytes, mime) = opt.textureFilter?.invoke(t) ?: (t.bytes to t.mimeType)
+                val view = view(bytes)
+                images.add(mapOf("name" to t.name, "bufferView" to view, "mimeType" to mime))
+                images.size - 1
+            }
+            val webp = images[img]["mimeType"] == "image/webp"
+            val idx = textureIndex.getOrPut(t.uid * 2 + sampler) {
+                if (webp) extensionsUsed.add("EXT_texture_webp")
+                val tex = if (webp)
+                    mapOf("sampler" to sampler, "extensions" to mapOf("EXT_texture_webp" to mapOf("source" to img)))
+                else mapOf("sampler" to sampler, "source" to img)
                 textures.add(tex)
                 textures.size - 1
             }
-            return LinkedHashMap<String, Any?>().apply { put("index", idx); putAll(extra) }
+            return LinkedHashMap<String, Any?>().apply {
+                put("index", idx); putAll(extra)
+                if (m.hasUvTransform()) {
+                    extensionsUsed.add("KHR_texture_transform")
+                    val tt = LinkedHashMap<String, Any?>()
+                    if (m.uvOffset[0] != 0f || m.uvOffset[1] != 0f) tt["offset"] = m.uvOffset.toList()
+                    if (m.uvRotation != 0f) tt["rotation"] = Math.toRadians(m.uvRotation.toDouble()).toFloat()
+                    if (m.uvScale[0] != 1f || m.uvScale[1] != 1f) tt["scale"] = m.uvScale.toList()
+                    put("extensions", mapOf("KHR_texture_transform" to tt))
+                }
+            }
         }
 
         fun material(m: Material): Int {
@@ -230,14 +256,14 @@ object GltfWriter {
             pbr["baseColorFactor"] = m.baseColor.toList()
             pbr["metallicFactor"] = m.metallic
             pbr["roughnessFactor"] = m.roughness
-            texRef(m.baseColorTexture)?.let { pbr["baseColorTexture"] = it }
-            texRef(m.metallicRoughnessTexture)?.let { pbr["metallicRoughnessTexture"] = it }
+            texRef(m.baseColorTexture, m)?.let { pbr["baseColorTexture"] = it }
+            texRef(m.metallicRoughnessTexture, m)?.let { pbr["metallicRoughnessTexture"] = it }
             val mat = LinkedHashMap<String, Any?>()
             mat["name"] = m.name
             mat["pbrMetallicRoughness"] = pbr
-            texRef(m.normalTexture, if (m.normalScale != 1f) mapOf("scale" to m.normalScale) else emptyMap())?.let { mat["normalTexture"] = it }
-            texRef(m.occlusionTexture, if (m.occlusionStrength != 1f) mapOf("strength" to m.occlusionStrength) else emptyMap())?.let { mat["occlusionTexture"] = it }
-            texRef(m.emissiveTexture)?.let { mat["emissiveTexture"] = it }
+            texRef(m.normalTexture, m, if (m.normalScale != 1f) mapOf("scale" to m.normalScale) else emptyMap())?.let { mat["normalTexture"] = it }
+            texRef(m.occlusionTexture, m, if (m.occlusionStrength != 1f) mapOf("strength" to m.occlusionStrength) else emptyMap())?.let { mat["occlusionTexture"] = it }
+            texRef(m.emissiveTexture, m)?.let { mat["emissiveTexture"] = it }
             if (m.emissive.any { it > 0f } || m.emissiveTexture != null) {
                 mat["emissiveFactor"] = m.emissive.toList()
             }

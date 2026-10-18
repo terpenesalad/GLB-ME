@@ -35,6 +35,8 @@ abstract class Panel(val act: EditorActivity) {
     open val rebuildOn: Set<Change> = setOf(Change.SELECTION, Change.OBJECTS, Change.UNDO)
     open fun onChanged(c: Set<Change>) { if (c.any { it in rebuildOn }) act.rebuildPanel() }
     open fun onClosed() {}
+    /** Optional small buttons shown in the sheet header (e.g. a ⋯ menu). */
+    open fun headerActions(): List<View> = emptyList()
 }
 
 /** Draggable number display; drag horizontally to scrub, tap to type. */
