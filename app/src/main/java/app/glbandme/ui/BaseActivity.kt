@@ -12,7 +12,7 @@ import android.view.WindowManager
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-class Insets(val left: Int, val top: Int, val right: Int, val bottom: Int)
+class Insets(val left: Int, val top: Int, val right: Int, val bottom: Int, val ime: Int = 0)
 
 /** Edge-to-edge dark activity with background job helpers. */
 abstract class BaseActivity : Activity() {
@@ -20,9 +20,21 @@ abstract class BaseActivity : Activity() {
     var insets = Insets(0, 0, 0, 0); private set
     private val insetListeners = ArrayList<(Insets) -> Unit>()
 
+    private var themeVersion = -1
+    /** Screens that can simply be rebuilt when text / interface size changes. */
+    protected open val rebuildOnThemeChange = true
+
+    override fun onResume() {
+        super.onResume()
+        Theme.load(this)
+        if (themeVersion >= 0 && themeVersion != Theme.version && rebuildOnThemeChange) { themeVersion = Theme.version; recreate(); return }
+        themeVersion = Theme.version
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Theme.load(this)
+        themeVersion = Theme.version
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
         if (Build.VERSION.SDK_INT >= 30) window.setDecorFitsSystemWindows(false)
@@ -42,7 +54,7 @@ abstract class BaseActivity : Activity() {
         root.setOnApplyWindowInsetsListener { _, wi ->
             insets = if (Build.VERSION.SDK_INT >= 30) {
                 val i = wi.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                Insets(i.left, i.top, i.right, i.bottom)
+                Insets(i.left, i.top, i.right, i.bottom, wi.getInsets(WindowInsets.Type.ime()).bottom)
             } else {
                 @Suppress("DEPRECATION")
                 Insets(wi.systemWindowInsetLeft, wi.systemWindowInsetTop, wi.systemWindowInsetRight, wi.systemWindowInsetBottom)

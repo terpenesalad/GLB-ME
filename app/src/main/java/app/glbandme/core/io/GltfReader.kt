@@ -64,7 +64,7 @@ class GltfReader(private val resolver: ((String) -> ByteArray?)? = null) {
         val ver = asset?.s("version") ?: "2.0"
         if (!ver.startsWith("2")) throw UnsupportedModelException("glTF $ver isn't supported, only 2.0")
         val required = root.a("extensionsRequired")?.mapNotNull { it as? String } ?: emptyList()
-        val supported = setOf("KHR_materials_unlit", "KHR_mesh_quantization", "KHR_texture_transform", "KHR_materials_emissive_strength", "EXT_texture_webp")
+        val supported = setOf("KHR_lights_punctual", "KHR_materials_unlit", "KHR_mesh_quantization", "KHR_texture_transform", "KHR_materials_emissive_strength", "EXT_texture_webp")
         for (e in required) {
             if (e == "KHR_draco_mesh_compression") throw UnsupportedModelException("This file uses Draco mesh compression, which isn't supported yet. Re-export it without Draco.")
             if (e == "EXT_meshopt_compression") throw UnsupportedModelException("This file uses meshopt compression, which isn't supported yet.")
@@ -100,9 +100,20 @@ class GltfReader(private val resolver: ((String) -> ByteArray?)? = null) {
             val local = nodeLocal(n)
             val wm = Mat4.mul(parentWorld, local)
             world[ni] = wm
+            n.o("extensions")?.o("KHR_lights_punctual")?.iOrNull("light")?.let { li ->
+                val spec = root.o("extensions")?.o("KHR_lights_punctual")?.a("lights")?.getOrNull(li)?.obj()?.let { app.glbandme.core.scene.LightSpec.fromGltf(it) }
+                if (spec != null) {
+                    val lo = app.glbandme.core.scene.LightProxy.create(spec.type, n.s("name") ?: "${spec.type.label} light")
+                    lo.light = spec
+                    lo.material = app.glbandme.core.scene.LightProxy.material(spec)
+                    lo.setTransform(wm)
+                    n.o("extras")?.o("glbandme")?.let { ex -> lo.visible = ex.b("visible", true) }
+                    objects.add(lo); nodeObjects.getOrPut(ni) { ArrayList() }.add(lo)
+                }
+            }
             n.iOrNull("mesh")?.let { mi ->
                 val created = buildMeshObjects(mi, n, wm)
-                if (created.isNotEmpty()) { objects.addAll(created); nodeObjects[ni] = created.toMutableList() }
+                if (created.isNotEmpty()) { objects.addAll(created); nodeObjects.getOrPut(ni) { ArrayList() }.addAll(created) }
             }
             n.a("children")?.forEach { c -> (c as? Number)?.toInt()?.let { visit(it, wm, depth + 1) } }
         }
@@ -115,7 +126,7 @@ class GltfReader(private val resolver: ((String) -> ByteArray?)? = null) {
             frameCount = readAnimation(anim, nodes.size, parent, world, nodeObjects, animFps)
         }
         if ((root.a("animations")?.size ?: 0) > 1) warnings.add("Only the first animation clip was imported.")
-        if (objects.isEmpty()) warnings.add("No triangle meshes were found in this file.")
+        if (objects.none { it.light == null }) warnings.add("No triangle meshes were found in this file.")
         return ImportResult(objects, warnings, editor, animFps, frameCount)
     }
 

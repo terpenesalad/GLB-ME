@@ -646,6 +646,56 @@ class Editor(val scene: Scene) {
         select(o)
     }
 
+    // ---- lights ----------------------------------------------------------------------------
+    fun addLight(type: app.glbandme.core.scene.LightType) {
+        val o = app.glbandme.core.scene.LightProxy.create(type)
+        val b = scene.bounds()
+        val c = if (b != null) (b.first + b.second) * 0.5f else Vec3(0f, 0.5f, 0f)
+        val r = if (b != null) (b.second - b.first).length().coerceAtLeast(1f) else 1.5f
+        when (type) {
+            app.glbandme.core.scene.LightType.POINT -> o.position.set(c.x + r * 0.5f, c.y + r * 0.6f, c.z + r * 0.4f)
+            app.glbandme.core.scene.LightType.SPOT -> {
+                o.position.set(c.x, c.y + r * 1.2f, c.z + r * 0.8f)
+                aimAt(o, c)
+            }
+            app.glbandme.core.scene.LightType.SUN -> { o.position.set(c.x, c.y + r, c.z); o.rotation.set(Quat.fromEulerDeg(-55f, 30f, 0f)) }
+        }
+        addObject(o, "Add ${type.label.lowercase()} light")
+    }
+
+    /** Rotate so local −Z looks at [target]. */
+    fun aimAt(o: SceneObject, target: Vec3) {
+        val d = (target - o.position)
+        if (d.length() < 1e-5f) return
+        val f = d.normalized()
+        val yaw = kotlin.math.atan2(-f.x, -f.z) * 180f / Math.PI.toFloat()
+        val pitch = kotlin.math.asin(f.y.coerceIn(-1f, 1f)) * 180f / Math.PI.toFloat()
+        o.rotation.set(Quat.fromEulerDeg(pitch, yaw, 0f))
+    }
+
+    fun editLight(o: SceneObject, label: String, block: (app.glbandme.core.scene.LightSpec) -> Unit) {
+        val l = o.light ?: return
+        val before = l.copy(); val beforeMat = o.material.copy()
+        locked { block(l); o.material.copyFrom(app.glbandme.core.scene.LightProxy.material(l)) }
+        lightChange(o, label, before, beforeMat)
+    }
+
+    fun lightChange(o: SceneObject, label: String, before: app.glbandme.core.scene.LightSpec, beforeMat: Material) {
+        val l = o.light ?: return
+        locked { o.material.copyFrom(app.glbandme.core.scene.LightProxy.material(l)) }
+        val after = l.copy(); val afterMat = o.material.copy()
+        val wasType = before.type; val nowType = after.type
+        if (wasType != nowType) locked { o.mesh = app.glbandme.core.scene.LightProxy.mesh(nowType) }
+        val beforeMesh = if (wasType != nowType) app.glbandme.core.scene.LightProxy.mesh(wasType) else null
+        val afterMesh = o.mesh
+        undo.push(LambdaAction(label, {
+            locked { o.light?.copyFrom(before); o.material.copyFrom(beforeMat); if (beforeMesh != null) o.mesh = beforeMesh }; notify(Change.MATERIAL, Change.TOPOLOGY)
+        }, {
+            locked { o.light?.copyFrom(after); o.material.copyFrom(afterMat); o.mesh = afterMesh }; notify(Change.MATERIAL, Change.TOPOLOGY)
+        }))
+        notify(Change.MATERIAL, Change.TOPOLOGY)
+    }
+
     // ---- material clipboard ---------------------------------------------------------------
     var copiedMaterial: Material? = null; private set
 

@@ -81,6 +81,12 @@ uniform bool uShadows;
 uniform sampler2DShadow uShadowMap;
 uniform float uShadowTexel;
 uniform vec4 uTint;           // rgb tint, a = amount (selection flash / highlight)
+// scene lights (KHR_lights_punctual)
+uniform int uPunctualCount;
+uniform vec3 uPPos[8];
+uniform vec3 uPColor[8];
+uniform vec3 uPDir[8];
+uniform vec4 uPParams[8];     // x type (0 point, 1 spot, 2 sun), y range, z cone scale, w cone offset
 
 const float PI = 3.14159265;
 
@@ -124,6 +130,24 @@ float shadowFactor(vec3 n) {
         for (int y = -1; y <= 1; y++)
             s += texture(uShadowMap, vec3(p.xy + vec2(float(x), float(y)) * uShadowTexel, p.z - bias));
     return s / 9.0;
+}
+
+vec3 brdf(vec3 n, vec3 v, vec3 l, vec3 f0, vec3 diffuseColor, float rough, float metallic, float NoV) {
+    float NoL = max(dot(n, l), 0.0);
+    if (NoL <= 0.0) return vec3(0.0);
+    float a = rough * rough;
+    float a2 = a * a;
+    vec3 h = normalize(l + v);
+    float NoH = max(dot(n, h), 0.0);
+    float VoH = max(dot(v, h), 0.0);
+    float dd = NoH * NoH * (a2 - 1.0) + 1.0;
+    float D = a2 / (PI * dd * dd);
+    float k = (rough + 1.0) * (rough + 1.0) / 8.0;
+    float G = (NoV / (NoV * (1.0 - k) + k)) * (NoL / (NoL * (1.0 - k) + k));
+    vec3 F = f0 + (1.0 - f0) * pow(1.0 - VoH, 5.0);
+    vec3 spec = D * G * F / max(4.0 * NoV * NoL, 1e-4);
+    vec3 kd = (1.0 - F) * (1.0 - metallic);
+    return (kd * diffuseColor / PI + spec) * NoL;
 }
 
 vec3 perturbNormal(vec3 n, vec3 pos, vec2 uv) {
@@ -183,21 +207,25 @@ void main() {
         vec3 direct = vec3(0.0);
         float sh = shadowFactor(n);
         for (int i = 0; i < 3; i++) {
-            vec3 l = uLightDir[i];
-            float NoL = max(dot(n, l), 0.0);
-            if (NoL <= 0.0) continue;
-            vec3 h = normalize(l + v);
-            float NoH = max(dot(n, h), 0.0);
-            float VoH = max(dot(v, h), 0.0);
-            float dd = NoH * NoH * (a2 - 1.0) + 1.0;
-            float D = a2 / (PI * dd * dd);
-            float k = (rough + 1.0) * (rough + 1.0) / 8.0;
-            float G = (NoV / (NoV * (1.0 - k) + k)) * (NoL / (NoL * (1.0 - k) + k));
-            vec3 F = f0 + (1.0 - f0) * pow(1.0 - VoH, 5.0);
-            vec3 spec = D * G * F / max(4.0 * NoV * NoL, 1e-4);
-            vec3 kd = (1.0 - F) * (1.0 - metallic);
             float s = i == 0 ? sh : 1.0;
-            direct += (kd * diffuseColor / PI + spec) * uLightColor[i] * NoL * s;
+            direct += brdf(n, v, uLightDir[i], f0, diffuseColor, rough, metallic, NoV) * uLightColor[i] * s;
+        }
+        for (int i = 0; i < 8; i++) {
+            if (i >= uPunctualCount) break;
+            vec4 pp = uPParams[i];
+            vec3 l;
+            float att = 1.0;
+            if (pp.x > 1.5) {
+                l = -uPDir[i];
+            } else {
+                vec3 dv = uPPos[i] - vWorldPos;
+                float d2 = max(dot(dv, dv), 1e-4);
+                l = dv * inversesqrt(d2);
+                att = 1.0 / d2;
+                if (pp.y > 0.0) { float r = sqrt(d2) / pp.y; float f = clamp(1.0 - r * r * r * r, 0.0, 1.0); att *= f * f; }
+                if (pp.x > 0.5) { float cd = dot(uPDir[i], -l); float sp = clamp(cd * pp.z + pp.w, 0.0, 1.0); att *= sp * sp; }
+            }
+            direct += brdf(n, v, l, f0, diffuseColor, rough, metallic, NoV) * uPColor[i] * att;
         }
         vec3 irradiance = mix(uGround, uSky, n.y * 0.5 + 0.5) * 0.9 + uHorizon * 0.15;
         vec3 r = reflect(-v, n);

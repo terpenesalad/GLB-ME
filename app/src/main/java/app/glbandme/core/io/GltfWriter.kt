@@ -48,11 +48,16 @@ object GltfWriter {
         val w = Builder(opt)
         val nodeIds = ArrayList<Int>()
         val nodeOf = HashMap<SceneObject, Int>()
+        val lights = ArrayList<Map<String, Any?>>()
         for (o in objects) {
-            val mesh = w.mesh(o)
             val node = LinkedHashMap<String, Any?>()
             node["name"] = o.name
-            node["mesh"] = mesh
+            val light = o.light
+            if (light != null) {
+                lights.add(light.toGltf(o.name))
+                node["extensions"] = mapOf("KHR_lights_punctual" to mapOf("light" to lights.size - 1))
+                w.extensionsUsed.add("KHR_lights_punctual")
+            } else node["mesh"] = w.mesh(o)
             if (o.position.x != 0f || o.position.y != 0f || o.position.z != 0f) node["translation"] = listOf(o.position.x, o.position.y, o.position.z)
             if (o.rotation.x != 0f || o.rotation.y != 0f || o.rotation.z != 0f || o.rotation.w != 1f) node["rotation"] = listOf(o.rotation.x, o.rotation.y, o.rotation.z, o.rotation.w)
             if (o.scale.x != 1f || o.scale.y != 1f || o.scale.z != 1f) node["scale"] = listOf(o.scale.x, o.scale.y, o.scale.z)
@@ -73,6 +78,7 @@ object GltfWriter {
 
         val root = LinkedHashMap<String, Any?>()
         root["asset"] = mapOf("version" to "2.0", "generator" to opt.generator)
+        if (lights.isNotEmpty()) root["extensions"] = mapOf("KHR_lights_punctual" to mapOf("lights" to lights))
         if (w.extensionsUsed.isNotEmpty()) root["extensionsUsed"] = w.extensionsUsed.toList()
         root["scene"] = 0
         val sceneObj = LinkedHashMap<String, Any?>()
@@ -91,7 +97,7 @@ object GltfWriter {
         }
         root["scenes"] = listOf(sceneObj)
         root["nodes"] = w.nodes
-        root["meshes"] = w.meshes
+        if (w.meshes.isNotEmpty()) root["meshes"] = w.meshes
         if (w.materials.isNotEmpty()) root["materials"] = w.materials
         if (w.textures.isNotEmpty()) {
             root["textures"] = w.textures

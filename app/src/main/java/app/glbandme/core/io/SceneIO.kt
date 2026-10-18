@@ -50,7 +50,7 @@ object SceneIO {
     }
 
     fun export(scene: Scene, format: ExportFormat, opt: GltfExportOptions = GltfExportOptions()): ByteArray {
-        val objs: List<SceneObject> = scene.objects.filter { (opt.includeHidden || it.visible) && (!opt.onlySelected || it === scene.selected) && it.mesh.triangleCount > 0 }
+        val objs: List<SceneObject> = scene.objects.filter { (opt.includeHidden || it.visible) && (!opt.onlySelected || it === scene.selected) && it.mesh.triangleCount > 0 && it.light == null }
         return when (format) {
             ExportFormat.GLB -> GltfWriter.write(scene, opt.apply { binary = true; projectData = false })
             ExportFormat.GLTF -> GltfWriter.write(scene, opt.apply { binary = false; projectData = false })

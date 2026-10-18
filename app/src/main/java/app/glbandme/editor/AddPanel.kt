@@ -40,6 +40,12 @@ class AddPanel(act: EditorActivity) : Panel(act) {
         root.addView(PanelUi.actionGrid(act, basic.map { (t, i) -> Triple(i, short(t)) { addPrimitive(t) } }))
         root.addView(act.sectionTitle("More shapes"))
         root.addView(PanelUi.actionGrid(act, more.map { (t, i) -> Triple(i, short(t)) { addPrimitive(t) } }))
+        root.addView(act.sectionTitle("Lights"))
+        root.addView(PanelUi.actionGrid(act, listOf(
+            Triple(Icon.BULB, "Point") { addLight(app.glbandme.core.scene.LightType.POINT) },
+            Triple(Icon.SPOT, "Spot") { addLight(app.glbandme.core.scene.LightType.SPOT) },
+            Triple(Icon.SUN, "Sun") { addLight(app.glbandme.core.scene.LightType.SUN) },
+        )))
         root.addView(act.sectionTitle("Bring in"))
         root.addView(PanelUi.actionGrid(act, listOf(
             Triple(Icon.IMPORT, "Model file") { act.importIntoScene() },
@@ -64,6 +70,15 @@ class AddPanel(act: EditorActivity) : Panel(act) {
         act.closeSheet()
         if (t == PrimType.SCULPT_SPHERE) act.selectTool(Tool.CLAY) else if (act.editor.tool.isBrush) act.selectTool(Tool.TRANSFORM)
         act.viewport.frameSelection()
+    }
+
+    private fun addLight(t: app.glbandme.core.scene.LightType) {
+        ed.addLight(t)
+        act.closeSheet()
+        act.selectTool(Tool.TRANSFORM)
+        if (ed.scene.render.env != app.glbandme.core.scene.EnvPreset.DARK && ed.scene.objects.count { it.light != null } == 1)
+            act.status("Tip: View › Lighting › Lights only shows just your lights", 2600)
+        else act.status("${t.label} light added", 1200)
     }
 
     private fun nextSlot(): Float {

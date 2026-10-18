@@ -81,6 +81,11 @@ class MaterialPanel(act: EditorActivity) : Panel(act) {
             root.addView(act.label("Select an object to edit its material.", 14f, Theme.TEXT_DIM).apply { setPadding(dp(2), dp(10), 0, dp(10)) })
             return root
         }
+        if (o.light != null) {
+            root.addView(act.label("This is a light – set its colour and brightness on the Object page.", 14f, Theme.TEXT_DIM).apply { setPadding(dp(2), dp(10), 0, dp(10)) })
+            root.addView(PanelUi.button(act, "Light settings", Icon.BULB) { act.openInspector(EditorActivity.INSPECT_OBJECT) })
+            return root
+        }
         val mat = o.material
 
         // ---- presets ----------------------------------------------------------------------------

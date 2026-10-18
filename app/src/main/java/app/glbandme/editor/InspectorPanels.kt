@@ -122,11 +122,11 @@ class ObjectRow(ctx: Context, val o: SceneObject, private val selected: Boolean)
         p.color = o.material.baseColorSrgb()
         c.drawCircle(dp(20f), h / 2, dp(8f), p)
         if (o.material.baseColorTexture != null) { p.style = Paint.Style.STROKE; p.strokeWidth = dp(1.5f); p.color = 0xCCFFFFFF.toInt(); c.drawCircle(dp(20f), h / 2, dp(8f), p); p.style = Paint.Style.FILL }
-        val icon = when { o.text != null -> Icon.TEXT; o.primitive != null -> Icon.SHAPES; o.keys.isNotEmpty() -> Icon.ANIMATE; else -> Icon.CUBE }
+        val icon = when { o.light != null -> when (o.light!!.type) { app.glbandme.core.scene.LightType.SPOT -> Icon.SPOT; app.glbandme.core.scene.LightType.SUN -> Icon.SUN; else -> Icon.BULB }; o.text != null -> Icon.TEXT; o.primitive != null -> Icon.SHAPES; o.keys.isNotEmpty() -> Icon.ANIMATE; else -> Icon.CUBE }
         Icons.draw(c, icon, dp(44f), h / 2, dp(18f), Theme.TEXT_DIM)
         tp.color = if (o.visible) Theme.TEXT else Theme.TEXT_MUTED
         tp.textSize = sp(14.5f); tp.typeface = if (selected) Theme.medium else Theme.regular
-        val count = Fmt.count(o.mesh.triangleCount)
+        val count = if (o.light != null) "Light" else Fmt.count(o.mesh.triangleCount)
         val tw = w - dp(62f) - dp(104f)
         c.drawText(TextUtils.ellipsize(o.name, tp, tw, TextUtils.TruncateAt.END).toString(), dp(62f), h / 2 + sp(14.5f) * 0.35f, tp)
         tp.textSize = sp(11.5f); tp.color = Theme.TEXT_MUTED; tp.typeface = Theme.regular
@@ -170,6 +170,50 @@ class ObjectPanel(act: EditorActivity) : Panel(act) {
 
     override fun onChanged(c: Set<Change>) { if (!editing) super.onChanged(c) }
 
+    private fun lightSection(root: LinearLayout, o: SceneObject, l: app.glbandme.core.scene.LightSpec) {
+        root.addView(act.sectionTitle("Light"))
+        val types = app.glbandme.core.scene.LightType.values().toList()
+        root.addView(Segmented(act, types.map { it.label }, types.indexOf(l.type), listOf(Icon.BULB, Icon.SPOT, Icon.SUN)).apply {
+            onSelect = { i -> ed.editLight(o, "Light type") { it.type = types[i]; if (it.type == app.glbandme.core.scene.LightType.SUN) it.intensity = 2.5f else if (it.intensity < 3f) it.intensity = 8f } }
+        })
+        val colorRow = act.hbox(0, 12).apply { setPadding(0, dp(12), 0, dp(4)); gravity = android.view.Gravity.CENTER_VERTICAL }
+        val sw = app.glbandme.ui.Swatch(act, app.glbandme.core.scene.Color.linearToArgb(l.color[0], l.color[1], l.color[2]), 44).apply { describe("Light colour") }
+        sw.onClick = {
+            val before = l.copy(); val bm = o.material.copy()
+            app.glbandme.ui.ColorPickerView.show(act, "Light colour", sw.color, live = { c -> val lin = app.glbandme.core.scene.Color.hexToLinear(c); ed.locked { lin.copyInto(l.color) }; sw.color = c; ed.requestRender() }) { c ->
+                val lin = app.glbandme.core.scene.Color.hexToLinear(c); ed.locked { lin.copyInto(l.color) }
+                ed.lightChange(o, "Light colour", before, bm)
+            }
+        }
+        colorRow.addView(sw)
+        val temps = listOf("Candle" to 0xFFB46B, "Warm" to 0xFFD6AA, "Daylight" to 0xFFF4EA, "Cool" to 0xCFE0FF)
+        for ((n, c) in temps) colorRow.addView(app.glbandme.ui.Chip(act, n).apply { onClick = { ed.editLight(o, "Light colour") { val lin = app.glbandme.core.scene.Color.hexToLinear(c); lin.copyInto(it.color) } } })
+        root.addView(android.widget.HorizontalScrollView(act).apply { isHorizontalScrollBarEnabled = false; addView(colorRow) })
+        var before: app.glbandme.core.scene.LightSpec? = null; var beforeMat: app.glbandme.core.scene.Material? = null
+        fun s(title: String, min: Float, max: Float, v: Float, step: Float, fmt: (Float) -> String, set: (app.glbandme.core.scene.LightSpec, Float) -> Unit) =
+            root.addView(HSlider(act, title, min, max, v, step, fmt).apply {
+                onChange = { x -> if (before == null) { before = l.copy(); beforeMat = o.material.copy(); editing = true }; ed.locked { set(l, x) }; ed.requestRender() }
+                onRelease = { val b = before; val bm = beforeMat; if (b != null && bm != null) ed.lightChange(o, title, b, bm); before = null; editing = false }
+            }, lp())
+        val sun = l.type == app.glbandme.core.scene.LightType.SUN
+        s("Brightness", 0f, if (sun) 10f else 200f, l.intensity, if (sun) 0.1f else 0.5f, { if (sun) String.format("%.1f", it) else "${String.format("%.1f", it)} cd" }) { x, v -> x.intensity = v }
+        if (!sun) s("Reach", 0f, 50f, l.range, 0.25f, { if (it == 0f) "Unlimited" else String.format("%.2f m", it) }) { x, v -> x.range = v }
+        if (l.type == app.glbandme.core.scene.LightType.SPOT) {
+            s("Beam", 5f, 89f, Math.toDegrees(l.outerCone.toDouble()).toFloat(), 1f, { "${it.toInt()}°" }) { x, v -> x.outerCone = Math.toRadians(v.toDouble()).toFloat(); x.innerCone = x.innerCone.coerceAtMost(x.outerCone * 0.98f) }
+            s("Soft edge", 0f, 1f, 1f - l.innerCone / l.outerCone.coerceAtLeast(1e-3f), 0.05f, { "${(it * 100).toInt()}%" }) { x, v -> x.innerCone = x.outerCone * (1f - v).coerceIn(0f, 0.98f) }
+        }
+        root.addView(PanelUi.button(act, "Aim at the model", Icon.FOCUS) {
+            val targets = ed.scene.objects.filter { it.visible && it.light == null }
+            val b = app.glbandme.core.io.ExportPipeline.bounds(targets)
+            if (b == null) act.status("Nothing to aim at", 1000) else {
+                val k = ed.beginTransform(o)
+                ed.locked { ed.aimAt(o, (b.first + b.second) * 0.5f) }
+                ed.commitTransform(o, k, "Aim light")
+            }
+        }, lp().apply { topMargin = dp(8) })
+        root.addView(act.label("Lights shine in the viewport (PBR view) and export to GLB/glTF as KHR_lights_punctual for game engines and three.js.", 11.5f, Theme.TEXT_MUTED).apply { setPadding(dp(4), dp(8), 0, 0); setLineSpacing(0f, 1.15f) })
+    }
+
     override fun build(): View {
         val root = act.vbox()
         val o = ed.scene.selected
@@ -182,8 +226,10 @@ class ObjectPanel(act: EditorActivity) : Panel(act) {
         val card = GroupCard(act)
         card.row(NavRow(act, Icon.PEN, "Name", o.name).apply { onClick = { Dialogs.prompt(act, "Rename object", o.name) { ed.rename(o, it) } } })
         card.row(ToggleRow(act, "Visible", o.visible).apply { onToggle = { v -> ed.setVisible(o, v) } })
-        card.row(ToggleRow(act, "Locked", o.locked, "Protect from sculpting and painting").apply { onToggle = { v -> ed.locked { o.locked = v }; ed.notify(Change.OBJECTS) } })
+        if (o.light == null) card.row(ToggleRow(act, "Locked", o.locked, "Protect from sculpting and painting").apply { onToggle = { v -> ed.locked { o.locked = v }; ed.notify(Change.OBJECTS) } })
         root.addView(card, lp().apply { topMargin = dp(6) })
+
+        o.light?.let { lightSection(root, o, it) }
 
         // ---- text / procedural ----------------------------------------------------------------------
         o.text?.let { spec ->
@@ -208,6 +254,8 @@ class ObjectPanel(act: EditorActivity) : Panel(act) {
         root.addView(PanelUi.vec3Row(act, "Scale", floatArrayOf(o.scale.x, o.scale.y, o.scale.z), 0.01f, "%.3f", begin, { i, v ->
             ed.locked { o.scale[i] = if (abs(v) < 1e-4f) 1e-4f else v }; ed.requestRender()
         }, commit))
+
+        if (o.light != null) return root
 
         // ---- dimensions -------------------------------------------------------------------------
         val units = Units.of(Prefs.of(act).units)

@@ -59,7 +59,7 @@ object ExportPipeline {
     class Prepared(val objects: List<SceneObject>, val root: FloatArray?, val triangles: Int)
 
     fun select(scene: Scene, s: ExportSettings): List<SceneObject> = scene.objects.filter { o ->
-        o.mesh.triangleCount > 0 && when (s.scope) {
+        o.mesh.triangleCount > 0 && (o.light == null || s.format == ExportFormat.GLB || s.format == ExportFormat.GLTF) && when (s.scope) {
             ExportScope.VISIBLE -> o.visible
             ExportScope.SELECTED -> o === scene.selected
             ExportScope.ALL -> true
@@ -97,13 +97,13 @@ object ExportPipeline {
      */
     fun prepare(scene: Scene, s: ExportSettings, progress: ((Float) -> Unit)? = null): Prepared {
         val objs = select(scene, s)
-        val total = objs.sumOf { it.mesh.triangleCount }
+        val total = objs.sumOf { if (it.light != null) 0 else it.mesh.triangleCount }
         val budget = s.maxTriangles
         val out = if (budget in 1 until total) {
             val ratio = budget.toFloat() / total
             objs.mapIndexed { i, o ->
                 val target = (o.mesh.triangleCount * ratio).toInt().coerceAtLeast(8)
-                if (target >= o.mesh.triangleCount) o else {
+                if (target >= o.mesh.triangleCount || o.light != null) o else {
                     val c = o.duplicate(copyMesh = false)
                     c.name = o.name
                     c.mesh = Decimator.decimate(o.mesh, target) { f -> progress?.invoke((i + f) / objs.size) }
@@ -111,7 +111,7 @@ object ExportPipeline {
                 }
             }
         } else objs
-        return Prepared(out, rootMatrix(objs, s), out.sumOf { it.mesh.triangleCount })
+        return Prepared(out, rootMatrix(objs.filter { it.light == null }.ifEmpty { objs }, s), out.sumOf { if (it.light != null) 0 else it.mesh.triangleCount })
     }
 
     fun export(scene: Scene, s: ExportSettings, textureFilter: ((Texture) -> Pair<ByteArray, String>)? = null, progress: ((Float) -> Unit)? = null): ExportResult {
@@ -146,7 +146,7 @@ object ExportPipeline {
         val w = ArrayList<String>()
         val objs = select(scene, s)
         if (objs.isEmpty()) { w.add(if (s.scope == ExportScope.SELECTED) "Nothing is selected." else "There's nothing visible to export."); return w }
-        val tris = objs.sumOf { it.mesh.triangleCount }
+        val tris = objs.sumOf { if (it.light != null) 0 else it.mesh.triangleCount }
         val budget = if (s.maxTriangles > 0) minOf(s.maxTriangles, tris) else tris
         if (s.format in setOf(ExportFormat.USDZ) && budget > 200_000) w.add("${budget / 1000}k triangles is heavy for AR – set a triangle limit.")
         if (s.format == ExportFormat.GLB && budget > 1_000_000) w.add("Over a million triangles – many apps will struggle. Consider a triangle limit.")

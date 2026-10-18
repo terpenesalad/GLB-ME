@@ -52,6 +52,10 @@ class EditorActivity : BaseActivity() {
     companion object {
         const val EXTRA_ID = "project_id"
         const val EXTRA_WARNINGS = "warnings"
+        const val EXTRA_ACTION = "action"
+        const val ACTION_TEXT = "text"
+        const val ACTION_DRAW = "draw"
+        const val ACTION_ADD = "add"
         private const val REQ_IMPORT = 11
         private const val REQ_EXPORT = 12
         private const val REQ_IMAGE = 13
@@ -62,6 +66,7 @@ class EditorActivity : BaseActivity() {
         const val INSPECT_MESH = 2
     }
 
+    override val rebuildOnThemeChange = false
     lateinit var editor: Editor; private set
     lateinit var viewport: Viewport; private set
     lateinit var overlay: Overlay; private set
@@ -127,6 +132,15 @@ class EditorActivity : BaseActivity() {
             meta = m
             setup(scene)
             intent.getStringExtra(EXTRA_WARNINGS)?.takeIf { it.isNotBlank() }?.let { Dialogs.message(this, "Imported with notes", it) }
+            val action = intent.getStringExtra(EXTRA_ACTION)
+            intent.removeExtra(EXTRA_ACTION)
+            root.postDelayed({
+                when (action) {
+                    ACTION_TEXT -> app.glbandme.editor.TextStudio.create(this, "Title")
+                    ACTION_DRAW -> app.glbandme.editor.ShapeStudio.show(this)
+                    ACTION_ADD -> openAdd()
+                }
+            }, 350)
         }
     }
 
@@ -297,6 +311,7 @@ class EditorActivity : BaseActivity() {
         (leftColumn.layoutParams as FrameLayout.LayoutParams).apply { gravity = Gravity.TOP or (if (left) Gravity.END else Gravity.START); topMargin = topLimit + dp(24); leftMargin = i.left + m; rightMargin = i.right + m }
         (statusView.layoutParams as FrameLayout.LayoutParams).apply { topMargin = topLimit + dp(6) }
         sheet.layoutIn(w, h, i, topLimit, landscape)
+        sheet.setImeInset(i.ime)
         // overlay HUD
         val railW = dp(56)
         overlay.navCx = if (left) (i.left + m + railW + dp(52)).toFloat() else (w - i.right - m - railW - dp(52)).toFloat()

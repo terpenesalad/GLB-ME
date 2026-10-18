@@ -5,11 +5,17 @@ import android.graphics.Bitmap
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.TextView
+import app.glbandme.BuildConfigInfo
 import app.glbandme.core.io.ExportFormat
 import app.glbandme.core.io.GltfExportOptions
 import app.glbandme.core.io.SceneIO
@@ -17,23 +23,25 @@ import app.glbandme.core.mesh.PrimType
 import app.glbandme.data.ProjectMeta
 import app.glbandme.data.ProjectStore
 import app.glbandme.data.ShareProvider
+import app.glbandme.editor.AddPanel
 import app.glbandme.ui.Theme.dp
-import app.glbandme.ui.Theme.sp
 
-/** Launcher: project library, create/templates/import. */
+/** Launcher: project library with search, quick starts, templates and import. */
 class HomeActivity : BaseActivity() {
     private lateinit var store: ProjectStore
     private lateinit var root: FrameLayout
     private lateinit var content: LinearLayout
     private lateinit var grid: LinearLayout
-    private lateinit var projectsTitle: android.widget.TextView
+    private lateinit var projectsTitle: TextView
+    private lateinit var search: EditText
+    private var query = ""
     private val thumbs = HashMap<String, Bitmap>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = ProjectStore(this)
         root = FrameLayout(this).apply {
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xFF1A1630.toInt(), Theme.BG, Theme.BG))
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Theme.blend(Theme.BG, Theme.accent, 0.18f), Theme.BG, Theme.BG))
         }
         val scroll = ScrollView(this).apply { isVerticalScrollBarEnabled = false; isFillViewport = true }
         content = vbox().apply { setPadding(dp(18), 0, dp(18), dp(24)) }
@@ -41,9 +49,20 @@ class HomeActivity : BaseActivity() {
         root.addView(scroll, flp(MATCH, MATCH))
         setContentView(root)
         trackInsets(root)
-        onInsets { i -> content.setPadding(dp(18) + i.left, i.top + dp(12), dp(18) + i.right, i.bottom + dp(28)) }
+        onInsets { i -> content.setPadding(dp(18) + i.left, i.top + dp(10), dp(18) + i.right, i.bottom + dp(28)) }
         build()
         handleIncoming(intent)
+        root.post { firstRun() }
+    }
+
+    private fun firstRun() {
+        val p = Prefs.of(this)
+        val v = BuildConfigInfo.versionName(this)
+        when {
+            !p.seenWelcome -> WelcomeSheet.welcome(this) { p.seenWelcome = true; p.lastVersionSeen = v }
+            p.lastVersionSeen != v && v.startsWith("1.1") -> WelcomeSheet.whatsNew(this) { p.lastVersionSeen = v }
+            else -> p.lastVersionSeen = v
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -65,55 +84,74 @@ class HomeActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
-        refreshProjects()
+        if (::grid.isInitialized) refreshProjects()
     }
 
     private fun build() {
-        // header
-        val header = hbox().apply { setPadding(0, dp(6), 0, dp(20)) }
-        header.addView(LogoView(this, 46))
-        val titles = vbox().apply { setPadding(dp(12), 0, 0, 0) }
-        titles.addView(label("GLB&ME", 26f, Theme.TEXT, bold = true).apply { letterSpacing = 0.02f })
-        titles.addView(label("Sculpt · Model · Paint · Animate · Export GLB", 12.5f, Theme.TEXT_DIM).apply { setPadding(0, dp(3), 0, 0) })
-        header.addView(titles, lp(0, WRAP, 1f))
-        header.addView(IconButton(this, Icon.HELP).apply { onClick = { showHelp() } })
-        header.addView(IconButton(this, Icon.SETTINGS).apply { onClick = { startActivity(Intent(this@HomeActivity, SettingsActivity::class.java)) } })
+        // ---- large title header -----------------------------------------------------------------------
+        val header = hbox().apply { setPadding(0, dp(4), 0, dp(6)); gravity = Gravity.CENTER_VERTICAL }
+        header.addView(LogoView(this, 40))
+        header.addView(label("GLB&ME", 15f, Theme.TEXT_DIM, bold = true).apply { setPadding(dp(10), 0, 0, 0); letterSpacing = 0.04f }, lp(0, WRAP, 1f))
+        header.addView(IconButton(this, Icon.HELP).apply { describe("Help"); onClick = { HelpSheet.show(this@HomeActivity) } })
+        header.addView(IconButton(this, Icon.SETTINGS).apply { describe("Settings"); onClick = { startActivity(Intent(this@HomeActivity, SettingsActivity::class.java)) } })
         content.addView(header)
+        content.addView(label("Create in 3D", 32f, Theme.TEXT, bold = true).apply { setPadding(dp(2), dp(6), 0, dp(2)); if (android.os.Build.VERSION.SDK_INT >= 28) isAccessibilityHeading = true })
+        content.addView(label("Sculpt, build, paint and export GLB models.", 15f, Theme.TEXT_DIM).apply { setPadding(dp(2), 0, 0, dp(18)) })
 
-        // create tiles
+        // ---- create tiles ----------------------------------------------------------------------------------
         val tiles = hbox(0, 12)
-        tiles.addView(ActionTile(this, Icon.PLUS, "New", "Blank or a shape", intArrayOf(Theme.accent, 0xFF9D7BFF.toInt())).apply { onClick = { newMenu() } }, lp(0, WRAP, 1f))
-        tiles.addView(ActionTile(this, Icon.TEMPLATES, "Templates", "20 starters", intArrayOf(0xFF22D3EE.toInt(), 0xFF0EA5E9.toInt())).apply {
+        tiles.addView(ActionTile(this, Icon.PLUS, "New", "Shape, text or blank", intArrayOf(Theme.accent, Theme.accentLight())).apply { onClick = { newSheet() } }, lp(0, WRAP, 1f))
+        tiles.addView(ActionTile(this, Icon.TEMPLATES, "Templates", "${app.glbandme.core.templates.Templates.all.size} starters", intArrayOf(0xFF0E7C86.toInt(), 0xFF22D3EE.toInt())).apply {
             onClick = { startActivity(Intent(this@HomeActivity, TemplatesActivity::class.java)) }
         }, lp(0, WRAP, 1f))
-        tiles.addView(ActionTile(this, Icon.IMPORT, "Import", "GLB, glTF, OBJ…", intArrayOf(0xFFFF7A59.toInt(), 0xFFFF4FA3.toInt())).apply { onClick = { pickImport() } }, lp(0, WRAP, 1f))
+        tiles.addView(ActionTile(this, Icon.IMPORT, "Import", "GLB · OBJ · STL…", intArrayOf(0xFFC2410C.toInt(), 0xFFFF7A59.toInt())).apply { onClick = { pickImport() } }, lp(0, WRAP, 1f))
         content.addView(tiles)
 
-        // quick shapes
-        content.addView(sectionTitle("Start with a shape").apply { setPadding(dp(2), dp(22), 0, dp(10)) })
+        // ---- quick starts ----------------------------------------------------------------------------------
+        content.addView(sectionTitle("Quick start").apply { setPadding(dp(4), dp(24), 0, dp(10)) })
         val chips = hbox(0, 8)
-        for ((t, icon) in listOf(
-            PrimType.SCULPT_SPHERE to Icon.SCULPT_SPHERE, PrimType.CUBE to Icon.CUBE, PrimType.CYLINDER to Icon.CYLINDER,
-            PrimType.TORUS to Icon.TORUS, PrimType.CAPSULE to Icon.CAPSULE, PrimType.CONE to Icon.CONE,
-            PrimType.ICOSPHERE to Icon.ICOSPHERE, PrimType.PLANE to Icon.PLANE
-        )) {
-            chips.addView(Chip(this, t.label, icon).apply { onClick = { SceneFactory.createAndOpen(this@HomeActivity, if (t == PrimType.SCULPT_SPHERE) "Sculpt" else t.label) { SceneFactory.withPrimitive(t) } } })
+        chips.addView(Chip(this, "Sculpt", Icon.SCULPT_SPHERE).apply { onClick = { start("Sculpt", PrimType.SCULPT_SPHERE) } })
+        chips.addView(Chip(this, "3D Text", Icon.TEXT).apply { onClick = { startEmpty("Title", EditorActivity.ACTION_TEXT) } })
+        chips.addView(Chip(this, "Draw", Icon.PEN).apply { onClick = { startEmpty("Drawing", EditorActivity.ACTION_DRAW) } })
+        for (t in listOf(PrimType.CUBE, PrimType.ROUNDED_BOX, PrimType.CYLINDER, PrimType.TORUS, PrimType.STAR, PrimType.HEART, PrimType.GEAR, PrimType.TERRAIN)) {
+            chips.addView(Chip(this, t.label, AddPanel.iconFor(t)).apply { onClick = { start(t.label, t) } })
         }
         content.addView(hscroll(chips).apply { clipToPadding = false })
 
-        // projects
-        val ph = hbox().apply { setPadding(0, dp(26), 0, dp(12)) }
-        projectsTitle = label("Your projects", 18f, Theme.TEXT, bold = true)
+        // ---- projects ---------------------------------------------------------------------------------------
+        val ph = hbox().apply { setPadding(0, dp(26), 0, dp(10)); gravity = Gravity.CENTER_VERTICAL }
+        projectsTitle = label("Your projects", 20f, Theme.TEXT, bold = true).apply { if (android.os.Build.VERSION.SDK_INT >= 28) isAccessibilityHeading = true }
         ph.addView(projectsTitle, lp(0, WRAP, 1f))
         ph.addView(Chip(this, sortLabel(), Icon.SORT).apply {
+            describe("Sort: ${sortLabel()}")
             onClick = {
                 val p = Prefs.of(this@HomeActivity)
                 p.sortMode = (p.sortMode + 1) % 3
-                text = sortLabel(); requestLayout(); invalidate()
+                text = sortLabel(); describe("Sort: ${sortLabel()}"); requestLayout(); invalidate()
                 refreshProjects()
             }
         })
         content.addView(ph)
+        search = EditText(this).apply {
+            hint = "Search projects"
+            setTextColor(Theme.TEXT); setHintTextColor(Theme.TEXT_MUTED)
+            textSize = 16f * Theme.uiScale
+            background = Theme.rounded(Theme.SURFACE_2, 12f)
+            setPadding(dp(40), dp(11), dp(14), dp(11))
+            isSingleLine = true
+            imeOptions = EditorInfo.IME_ACTION_SEARCH
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: Editable?) { query = s?.toString()?.trim() ?: ""; refreshProjects() }
+            })
+        }
+        val searchWrap = FrameLayout(this)
+        searchWrap.addView(search, FrameLayout.LayoutParams(MATCH, WRAP))
+        searchWrap.addView(object : View(this) {
+            override fun onDraw(c: android.graphics.Canvas) = Icons.draw(c, Icon.SEARCH, width / 2f, height / 2f, dp(18f), Theme.TEXT_MUTED)
+        }.apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, FrameLayout.LayoutParams(dp(40), MATCH, Gravity.START or Gravity.CENTER_VERTICAL))
+        content.addView(searchWrap, lp().apply { bottomMargin = dp(12) })
         grid = vbox(0, 12)
         content.addView(grid)
     }
@@ -121,21 +159,24 @@ class HomeActivity : BaseActivity() {
     private fun sortLabel() = when (Prefs.of(this).sortMode) { 0 -> "Recent"; 1 -> "Name"; else -> "Size" }
 
     private fun columns(): Int {
-        val wdp = resources.displayMetrics.widthPixels / resources.displayMetrics.density
+        val wdp = resources.displayMetrics.widthPixels / resources.displayMetrics.density / Theme.uiScale
         return when { wdp >= 900 -> 4; wdp >= 600 -> 3; else -> 2 }
     }
 
     private fun refreshProjects() {
-        val list = store.list().let { l ->
+        val all = store.list()
+        val list = all.filter { query.isEmpty() || it.name.contains(query, ignoreCase = true) }.let { l ->
             when (Prefs.of(this).sortMode) {
                 1 -> l.sortedBy { it.name.lowercase() }
                 2 -> l.sortedByDescending { it.triangles }
                 else -> l.sortedByDescending { it.modified }
             }
         }
-        projectsTitle.text = if (list.isEmpty()) "Your projects" else "Your projects · ${list.size}"
+        projectsTitle.text = if (all.isEmpty()) "Your projects" else "Your projects · ${all.size}"
+        (search.parent as View).visibility = if (all.size > 3) View.VISIBLE else View.GONE
         grid.removeAllViews()
-        if (list.isEmpty()) { grid.addView(emptyState()); return }
+        if (all.isEmpty()) { grid.addView(emptyState()); return }
+        if (list.isEmpty()) { grid.addView(label("No projects match “$query”.", 14f, Theme.TEXT_DIM).apply { setPadding(dp(4), dp(10), 0, dp(10)) }); return }
         val cols = columns()
         var row: LinearLayout? = null
         list.forEachIndexed { i, m ->
@@ -165,21 +206,36 @@ class HomeActivity : BaseActivity() {
         background = Theme.rounded(Theme.SURFACE, 22f)
         setPadding(dp(24), dp(30), dp(24), dp(26))
         addView(LogoView(this@HomeActivity, 64))
-        addView(label("No projects yet", 17f, Theme.TEXT, bold = true).apply { setPadding(0, dp(16), 0, dp(6)) })
-        addView(label("Sculpt something from a sphere, open a template or import a GLB to get started.", 13.5f, Theme.TEXT_DIM).apply { gravity = Gravity.CENTER; setLineSpacing(0f, 1.2f) })
+        addView(label("No projects yet", 18f, Theme.TEXT, bold = true).apply { setPadding(0, dp(16), 0, dp(6)) })
+        addView(label("Start from a ball of clay, type some 3D text, open a template or import a GLB.", 14f, Theme.TEXT_DIM).apply { gravity = Gravity.CENTER; setLineSpacing(0f, 1.2f) })
         addView(PillButton(this@HomeActivity, "Start sculpting", Icon.SCULPT_SPHERE, PillButton.Style.PRIMARY).apply {
-            onClick = { SceneFactory.createAndOpen(this@HomeActivity, "Sculpt") { SceneFactory.withPrimitive(PrimType.SCULPT_SPHERE) } }
+            onClick = { start("Sculpt", PrimType.SCULPT_SPHERE) }
         }, LinearLayout.LayoutParams(WRAP, WRAP).apply { topMargin = dp(18) })
     }
 
-    private fun newMenu() {
-        Dialogs.menu(this, "New project", listOf(
-            MenuItem(Icon.SCULPT_SPHERE, "Sculpt sphere", subtitle = "Dense clay ball – the classic start") { SceneFactory.createAndOpen(this, "Sculpt") { SceneFactory.withPrimitive(PrimType.SCULPT_SPHERE) } },
-            MenuItem(Icon.CUBE, "Cube", subtitle = "Subdivided box for hard-surface or sculpting") { SceneFactory.createAndOpen(this, "Cube") { SceneFactory.withPrimitive(PrimType.CUBE) } },
-            MenuItem(Icon.GRID, "Empty scene", subtitle = "Add shapes, text and images yourself") { SceneFactory.createAndOpen(this, "Untitled") { SceneFactory.empty() } },
-            MenuItem(Icon.TEMPLATES, "From template…") { startActivity(Intent(this, TemplatesActivity::class.java)) },
-            MenuItem(Icon.IMPORT, "Import a model…", subtitle = "GLB · glTF · OBJ · STL · PLY") { pickImport() },
-        ))
+    private fun start(name: String, t: PrimType) = SceneFactory.createAndOpen(this, if (t == PrimType.SCULPT_SPHERE) "Sculpt" else name) { SceneFactory.withPrimitive(t) }
+
+    private fun startEmpty(name: String, action: String) = SceneFactory.createAndOpen(this, name, action) { SceneFactory.empty() }
+
+    /** "New" sheet: blank, quick creations and every shape. */
+    private fun newSheet() {
+        val body = vbox()
+        lateinit var d: android.app.Dialog
+        body.addView(sectionTitle("Start with"))
+        body.addView(app.glbandme.editor.PanelUi.actionGrid(this, listOf(
+            Triple(Icon.SCULPT_SPHERE, "Clay ball") { d.dismiss(); start("Sculpt", PrimType.SCULPT_SPHERE) },
+            Triple(Icon.TEXT, "3D Text") { d.dismiss(); startEmpty("Title", EditorActivity.ACTION_TEXT) },
+            Triple(Icon.PEN, "Draw") { d.dismiss(); startEmpty("Drawing", EditorActivity.ACTION_DRAW) },
+            Triple(Icon.GRID, "Empty") { d.dismiss(); startEmpty("Untitled", EditorActivity.ACTION_ADD) },
+        )))
+        body.addView(sectionTitle("Shapes"))
+        body.addView(app.glbandme.editor.PanelUi.actionGrid(this, (AddPanel.basic.drop(1) + AddPanel.more).map { (t, i) -> Triple(i, t.label) { d.dismiss(); start(t.label, t) } }))
+        body.addView(sectionTitle("More"))
+        body.addView(app.glbandme.editor.PanelUi.actionGrid(this, listOf(
+            Triple(Icon.TEMPLATES, "Templates") { d.dismiss(); startActivity(Intent(this, TemplatesActivity::class.java)) },
+            Triple(Icon.IMPORT, "Import") { d.dismiss(); pickImport() },
+        )))
+        d = Dialogs.sheet(this, "New project", body, action = null, tall = false)
     }
 
     private fun projectMenu(m: ProjectMeta) {
@@ -216,8 +272,6 @@ class HomeActivity : BaseActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQ_IMPORT && resultCode == RESULT_OK) data?.data?.let { SceneFactory.importAsProject(this, it) }
     }
-
-    private fun showHelp() = HelpSheet.show(this)
 
     companion object { private const val REQ_IMPORT = 41 }
 }

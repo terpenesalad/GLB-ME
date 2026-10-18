@@ -134,6 +134,15 @@ class SheetHost(ctx: Context) : FrameLayout(ctx) {
 
     fun setTitle(t: String) { titleView.text = t }
 
+    private var imeInset = 0
+    /** Keep content scrollable above the on-screen keyboard. */
+    fun setImeInset(px: Int) {
+        if (px == imeInset) return
+        imeInset = px
+        if (px > 0 && isOpen && dock == Dock.BOTTOM) expand()
+        body.getChildAt(0)?.let { it.setPadding(it.paddingLeft, it.paddingTop, it.paddingRight, dp(28) + px) }
+    }
+
     fun setActions(views: List<View>) {
         headerActions.removeAllViews()
         for (v in views) headerActions.addView(v, lp(WRAP, WRAP))
@@ -153,13 +162,14 @@ class SheetHost(ctx: Context) : FrameLayout(ctx) {
     fun setContent(v: View, keepScroll: Boolean = false) {
         val y = body.scrollY
         body.removeAllViews()
-        v.setPadding(dp(16), dp(6), dp(16), dp(28))
+        v.setPadding(dp(16), dp(6), dp(16), dp(28) + imeInset)
         body.addView(v, LayoutParams(MATCH, WRAP))
         if (keepScroll) body.post { body.scrollTo(0, y) } else body.scrollTo(0, 0)
     }
 
     fun open() {
-        if (isOpen) return
+        animate().cancel()
+        if (isOpen && visibility == VISIBLE) return
         isOpen = true
         visibility = VISIBLE
         anim?.cancel()
@@ -167,32 +177,35 @@ class SheetHost(ctx: Context) : FrameLayout(ctx) {
             height0 = height0.takeIf { it >= dp(160) } ?: mediumH
             (layoutParams as LayoutParams).height = height0
             requestLayout()
-            translationY = height0.toFloat()
-            animate().translationY(0f).setDuration(Theme.anim(260)).setInterpolator(DecelerateInterpolator(2f))
-                .setUpdateListener { reportCoverage() }.withEndAction { reportCoverage() }.start()
-        } else {
-            translationX = (sideWidth + rightInset).toFloat()
-            animate().translationX(0f).setDuration(Theme.anim(240)).setInterpolator(DecelerateInterpolator(2f))
-                .setUpdateListener { reportCoverage() }.withEndAction { reportCoverage() }.start()
         }
         announceForAccessibility("${titleView.text} panel opened")
-        if (Theme.reduceMotion) reportCoverage()
+        if (Theme.reduceMotion) { translationX = 0f; translationY = 0f; reportCoverage(); return }
+        if (dock == Dock.BOTTOM) {
+            if (translationY == 0f) translationY = height0.toFloat()
+            animate().translationY(0f).setDuration(260).setInterpolator(DecelerateInterpolator(2f))
+                .setUpdateListener { reportCoverage() }.withEndAction { reportCoverage() }.start()
+        } else {
+            if (translationX == 0f) translationX = (sideWidth + rightInset).toFloat()
+            animate().translationX(0f).setDuration(240).setInterpolator(DecelerateInterpolator(2f))
+                .setUpdateListener { reportCoverage() }.withEndAction { reportCoverage() }.start()
+        }
     }
 
     fun close() {
         if (!isOpen) return
         isOpen = false
-        val end = Runnable { visibility = GONE; reportCoverage(); onClosed?.invoke() }
-        if (dock == Dock.BOTTOM) animate().translationY(height0.toFloat()).setDuration(Theme.anim(200)).setUpdateListener { reportCoverage() }.withEndAction(end).start()
-        else animate().translationX((sideWidth + rightInset).toFloat()).setDuration(Theme.anim(200)).setUpdateListener { reportCoverage() }.withEndAction(end).start()
-        if (Theme.reduceMotion) end.run()
+        animate().cancel()
+        val end = Runnable { visibility = GONE; translationX = 0f; translationY = 0f; reportCoverage(); onClosed?.invoke() }
+        if (Theme.reduceMotion) { end.run(); return }
+        if (dock == Dock.BOTTOM) animate().translationY(height0.toFloat()).setDuration(200).setUpdateListener { reportCoverage() }.withEndAction(end).start()
+        else animate().translationX((sideWidth + rightInset).toFloat()).setDuration(200).setUpdateListener { reportCoverage() }.withEndAction(end).start()
     }
 
     fun expand() = snapTo(largeH)
     fun collapse() = snapTo(mediumH)
 
     private fun reportCoverage() {
-        if (!isOpen && visibility != VISIBLE) { onCoverageChanged?.invoke(0, 0); return }
+        if (visibility != VISIBLE) { onCoverageChanged?.invoke(0, 0); return }
         if (dock == Dock.BOTTOM) onCoverageChanged?.invoke(max(0, (height0 - translationY).toInt()), 0)
         else onCoverageChanged?.invoke(0, max(0, (sideWidth + rightInset - translationX).toInt()))
     }

@@ -63,6 +63,11 @@ object Theme {
     val bold: Typeface = Typeface.create("sans-serif", Typeface.BOLD)
     val mono: Typeface = Typeface.MONOSPACE
 
+    fun blend(a: Int, b: Int, t: Float): Int {
+        fun ch(x: Int, y: Int) = (x + (y - x) * t).toInt().coerceIn(0, 255)
+        return (0xFF shl 24) or (ch(Color.red(a), Color.red(b)) shl 16) or (ch(Color.green(a), Color.green(b)) shl 8) or ch(Color.blue(a), Color.blue(b))
+    }
+
     fun withAlpha(c: Int, a: Float) = (c and 0x00ffffff) or ((a * 255).toInt().coerceIn(0, 255) shl 24)
 
     fun accentRgb(): FloatArray = floatArrayOf(Color.red(accent) / 255f, Color.green(accent) / 255f, Color.blue(accent) / 255f)
@@ -92,13 +97,18 @@ object Theme {
     fun load(ctx: Context) {
         val p = Prefs.of(ctx)
         accent = p.accent.let { a -> if (a in accentChoices) a else accentChoices[0] }
-        uiScale = if (p.largeUi) 1.15f else 1f
-        fontScale = ctx.resources.configuration.fontScale.coerceIn(0.9f, 1.3f)
+        val oldKey = "$uiScale/$fontScale/$boldText/${p.accent}"
+        uiScale = when (p.uiSize) { 1 -> 1.12f; 2 -> 1.25f; else -> 1f }
+        fontScale = (if (p.textScale > 0f) p.textScale else ctx.resources.configuration.fontScale).coerceIn(0.85f, 1.5f)
         val systemNoAnim = runCatching { Settings.Global.getFloat(ctx.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false)
         reduceMotion = p.reduceMotion || systemNoAnim
         leftHanded = p.leftHanded
         boldText = p.boldText || (android.os.Build.VERSION.SDK_INT >= 31 && ctx.resources.configuration.fontWeightAdjustment > 0)
+        if (oldKey != "$uiScale/$fontScale/$boldText/${p.accent}") version++
     }
+
+    /** Bumped whenever sizes / fonts / accent change so screens can rebuild. */
+    var version = 0; private set
 }
 
 /** App settings (SharedPreferences). */
@@ -126,6 +136,11 @@ class Prefs private constructor(private val sp: SharedPreferences) {
     var recentColors: String get() = sp.getString("recentColors", "") ?: ""; set(v) = sp.edit().putString("recentColors", v).apply()
     // accessibility
     var largeUi: Boolean get() = b("largeUi", false); set(v) = setB("largeUi", v)
+    /** 0 standard, 1 large, 2 extra large */
+    var uiSize: Int get() = sp.getInt("uiSize", if (largeUi) 1 else 0); set(v) = sp.edit().putInt("uiSize", v).apply()
+    /** 0 = follow the system font size */
+    var textScale: Float get() = sp.getFloat("textScale", 0f); set(v) = sp.edit().putFloat("textScale", v).apply()
+    var lastVersionSeen: String get() = sp.getString("lastVersionSeen", "") ?: ""; set(v) = sp.edit().putString("lastVersionSeen", v).apply()
     var reduceMotion: Boolean get() = b("reduceMotion", false); set(v) = setB("reduceMotion", v)
     var leftHanded: Boolean get() = b("leftHanded", false); set(v) = setB("leftHanded", v)
     var boldText: Boolean get() = b("boldText", false); set(v) = setB("boldText", v)

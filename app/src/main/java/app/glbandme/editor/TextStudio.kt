@@ -124,6 +124,7 @@ class TextStudioPanel(act: EditorActivity, private val o: SceneObject, private v
                 override fun afterTextChanged(s: Editable?) { spec.text = s?.toString() ?: ""; if (spec.text.isNotBlank()) schedule() }
             })
         }
+        et.setOnFocusChangeListener { _, has -> if (has) act.sheet.expand() }
         root.addView(et, lp().apply { topMargin = dp(6) })
 
         // ---- fonts --------------------------------------------------------------------------------

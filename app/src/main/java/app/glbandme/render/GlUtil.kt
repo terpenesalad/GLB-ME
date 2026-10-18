@@ -89,6 +89,7 @@ object GlUtil {
         fun set3f(n: String, a: Float, b: Float, c: Float) { val l = u(n); if (l >= 0) glUniform3f(l, a, b, c) }
         fun set4f(n: String, a: Float, b: Float, c: Float, d: Float) { val l = u(n); if (l >= 0) glUniform4f(l, a, b, c, d) }
         fun set3fv(n: String, v: FloatArray, count: Int = v.size / 3) { val l = u(n); if (l >= 0) glUniform3fv(l, count, v, 0) }
+        fun set4fv(n: String, v: FloatArray, count: Int = v.size / 4) { val l = u(n); if (l >= 0) glUniform4fv(l, count, v, 0) }
         fun setMat4(n: String, m: FloatArray) { val l = u(n); if (l >= 0) glUniformMatrix4fv(l, 1, false, m, 0) }
         fun setMat3(n: String, m: FloatArray) { val l = u(n); if (l >= 0) glUniformMatrix3fv(l, 1, false, m, 0) }
         fun release() = glDeleteProgram(id)

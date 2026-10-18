@@ -189,8 +189,40 @@ class SceneRenderer {
             EnvPreset.NIGHT -> Triple(floatArrayOf(1.2f, 1.35f, 1.9f), floatArrayOf(0.12f, 0.15f, 0.3f), floatArrayOf(0.7f, 0.8f, 1.4f))
             EnvPreset.OVERCAST -> Triple(floatArrayOf(1.3f, 1.3f, 1.35f), floatArrayOf(0.5f, 0.5f, 0.52f), floatArrayOf(0.4f, 0.4f, 0.42f))
             EnvPreset.NEON -> Triple(floatArrayOf(2.6f, 0.6f, 2.2f), floatArrayOf(0.1f, 0.6f, 0.9f), floatArrayOf(0.2f, 1.6f, 1.8f))
+            EnvPreset.DARK -> Triple(floatArrayOf(0f, 0f, 0f), floatArrayOf(0f, 0f, 0f), floatArrayOf(0f, 0f, 0f))
         }
         k.copyInto(lightCols, 0); f.copyInto(lightCols, 3); rim.copyInto(lightCols, 6)
+    }
+
+    private val pPos = FloatArray(24)
+    private val pCol = FloatArray(24)
+    private val pDir = FloatArray(24)
+    private val pPar = FloatArray(32)
+
+    /** Upload up to 8 visible scene lights. */
+    private fun setupPunctual(scene: Scene) {
+        var n = 0
+        val m = FloatArray(16)
+        for (o in scene.objects) {
+            val l = o.light ?: continue
+            if (!o.visible || n >= 8) continue
+            o.localMatrix(m)
+            pPos[n * 3] = m[12]; pPos[n * 3 + 1] = m[13]; pPos[n * 3 + 2] = m[14]
+            // local -Z in world space
+            var dx = -m[8]; var dy = -m[9]; var dz = -m[10]
+            val len = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz).coerceAtLeast(1e-6f)
+            dx /= len; dy /= len; dz /= len
+            pDir[n * 3] = dx; pDir[n * 3 + 1] = dy; pDir[n * 3 + 2] = dz
+            for (k in 0 until 3) pCol[n * 3 + k] = l.color[k] * l.intensity
+            val (cs, co) = l.coneScaleOffset()
+            pPar[n * 4] = l.type.ordinal.toFloat(); pPar[n * 4 + 1] = l.range; pPar[n * 4 + 2] = cs; pPar[n * 4 + 3] = co
+            n++
+        }
+        meshProg.set1i("uPunctualCount", n)
+        if (n > 0) {
+            meshProg.set3fv("uPPos", pPos, 8); meshProg.set3fv("uPColor", pCol, 8)
+            meshProg.set3fv("uPDir", pDir, 8); meshProg.set4fv("uPParams", pPar, 8)
+        }
     }
 
     private fun envColors(scene: Scene): Triple<FloatArray, FloatArray, FloatArray> = when (scene.render.env) {
@@ -199,6 +231,7 @@ class SceneRenderer {
         EnvPreset.NIGHT -> Triple(floatArrayOf(0.06f, 0.08f, 0.18f), floatArrayOf(0.1f, 0.12f, 0.2f), floatArrayOf(0.03f, 0.03f, 0.04f))
         EnvPreset.OVERCAST -> Triple(floatArrayOf(0.8f, 0.82f, 0.85f), floatArrayOf(0.62f, 0.63f, 0.65f), floatArrayOf(0.2f, 0.2f, 0.2f))
         EnvPreset.NEON -> Triple(floatArrayOf(0.15f, 0.05f, 0.3f), floatArrayOf(0.4f, 0.1f, 0.5f), floatArrayOf(0.02f, 0.05f, 0.08f))
+        EnvPreset.DARK -> Triple(floatArrayOf(0.025f, 0.027f, 0.035f), floatArrayOf(0.02f, 0.02f, 0.025f), floatArrayOf(0.01f, 0.01f, 0.01f))
     }
 
     private fun computeLightVP(scene: Scene): Boolean {
@@ -248,6 +281,7 @@ class SceneRenderer {
             glPolygonOffset(2f, 4f)
             depthProg.use()
             for (o in visible) {
+                if (o.light != null) continue
                 if (o.material.alphaMode == AlphaMode.BLEND && o.material.baseColor[3] < 0.5f) continue
                 o.localMatrix(model)
                 Mat4.mul(lightVP, model, mvp)
@@ -315,6 +349,7 @@ class SceneRenderer {
         meshProg.set3f("uHorizon", horizon[0], horizon[1], horizon[2])
         meshProg.set3f("uGround", ground[0], ground[1], ground[2])
         meshProg.set1f("uExposure", rs.exposure)
+        setupPunctual(scene)
         meshProg.set1i("uMode", when (rs.shading) { ShadingMode.PBR -> 0; ShadingMode.MATCAP -> 1; ShadingMode.FLAT_CLAY -> 2; ShadingMode.NORMALS -> 3; ShadingMode.UNLIT -> 4 })
         meshProg.setMat4("uLightVP", lightVP)
         meshProg.set1i("uShadows", if (shadows) 1 else 0)

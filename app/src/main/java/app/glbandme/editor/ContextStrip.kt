@@ -66,6 +66,17 @@ class ContextStrip(private val act: EditorActivity) : LinearLayout(act) {
         }
         gizmoModes()
         divider()
+        val sel = ed.scene.selected
+        if (sel?.light != null) {
+            btn(Icon.FOCUS, "Aim") {
+                val b = app.glbandme.core.io.ExportPipeline.bounds(ed.scene.objects.filter { it.visible && it.light == null })
+                if (b != null) { val k = ed.beginTransform(sel); ed.locked { ed.aimAt(sel, (b.first + b.second) * 0.5f) }; ed.commitTransform(sel, k, "Aim light") }
+            }
+            btn(Icon.BULB, "Light") { act.openInspector(EditorActivity.INSPECT_OBJECT) }
+            btn(Icon.COPY, "Duplicate") { ed.duplicateSelected() }
+            btn(Icon.TRASH, "Delete") { ed.deleteSelected() }
+            return
+        }
         btn(Icon.MAGIC, "Snap", ed.snap) { b -> ed.snap = !ed.snap; b.active = ed.snap; act.status(if (ed.snap) "Snapping on" else "Snapping off", 800) }
         btn(Icon.FOCUS, "Focus") { act.viewport.frameSelection() }
         btn(Icon.FLOOR, "Floor") { ed.dropToFloor() }
@@ -118,6 +129,7 @@ class ContextStrip(private val act: EditorActivity) : LinearLayout(act) {
 
     private fun editTools(hasSel: Boolean) {
         if (!hasSel) { note("Tap an object, then brush over its faces"); return }
+        if (ed.scene.selected?.light != null) { note("Lights have no faces to edit"); return }
         val f = ed.faces
         val n = if (f.mesh === ed.scene.selected?.mesh) f.list().size else 0
         gizmoModes()

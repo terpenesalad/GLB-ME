@@ -28,6 +28,8 @@ class SceneObject(
     var primitive: PrimitiveSpec? = null
     /** 3D text parameters (editable until the mesh is sculpted / edited). */
     var text: TextSpec? = null
+    /** When set this object is a light; its mesh is only an on-screen stand-in. */
+    var light: LightSpec? = null
     /** frame -> transform */
     val keys = TreeMap<Int, Keyframe>()
 
@@ -62,6 +64,8 @@ class SceneObject(
         o.visible = visible
         o.primitive = primitive?.copy()
         o.text = text?.copy()
+        o.light = light?.copy()
+        o.locked = locked
         for ((f, k) in keys) o.keys[f] = k.copy()
         return o
     }
@@ -88,7 +92,7 @@ class SceneObject(
 
 enum class ShadingMode(val label: String) { PBR("PBR"), MATCAP("Matcap"), FLAT_CLAY("Clay"), NORMALS("Normals"), UNLIT("Unlit") }
 
-enum class EnvPreset(val label: String) { STUDIO("Studio"), SUNSET("Sunset"), NIGHT("Night"), OVERCAST("Overcast"), NEON("Neon") }
+enum class EnvPreset(val label: String) { STUDIO("Studio"), SUNSET("Sunset"), NIGHT("Night"), OVERCAST("Overcast"), NEON("Neon"), DARK("Lights only") }
 
 /** Viewport/render settings saved with the project. */
 class RenderSettings {
@@ -156,7 +160,7 @@ class Scene {
         for (o in objects) o.evaluate(frame)
     }
 
-    fun totalTriangles() = objects.sumOf { it.mesh.triangleCount }
+    fun totalTriangles() = objects.sumOf { if (it.light != null) 0 else it.mesh.triangleCount }
     fun totalVertices() = objects.sumOf { it.mesh.vertexCount }
 
     fun bounds(onlyVisible: Boolean = true): Pair<Vec3, Vec3>? {

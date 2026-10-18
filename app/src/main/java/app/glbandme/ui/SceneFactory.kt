@@ -71,7 +71,7 @@ object SceneFactory {
     fun thumbnail(scene: Scene, size: Int = 384): Bitmap? = OffscreenRenderer.render(scene, size, size, frameCamera = true)
 
     /** Persist a new project (with thumbnail) off the main thread, then open the editor. */
-    fun createAndOpen(act: BaseActivity, name: String, build: () -> Scene) {
+    fun createAndOpen(act: BaseActivity, name: String, action: String? = null, build: () -> Scene) {
         val store = ProjectStore(act)
         val progress = Dialogs.progress(act, "Preparing scene…")
         act.async({
@@ -80,12 +80,12 @@ object SceneFactory {
             store.create(store.uniqueName(name), scene, thumb)
         }, onError = { progress.dismiss(); act.showError(it) }) { meta ->
             progress.dismiss()
-            openEditor(act, meta.id)
+            openEditor(act, meta.id, action)
         }
     }
 
-    fun openEditor(act: Activity, id: String) {
-        act.startActivity(Intent(act, EditorActivity::class.java).putExtra(EditorActivity.EXTRA_ID, id))
+    fun openEditor(act: Activity, id: String, action: String? = null) {
+        act.startActivity(Intent(act, EditorActivity::class.java).putExtra(EditorActivity.EXTRA_ID, id).apply { if (action != null) putExtra(EditorActivity.EXTRA_ACTION, action) })
     }
 
     /** Import a model file as a new project. */

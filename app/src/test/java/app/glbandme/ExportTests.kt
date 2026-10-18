@@ -182,4 +182,45 @@ class ExportTests {
         assertEquals(0f, p[1], 1e-5f)
         assertEquals(2f, p[2], 1e-5f)
     }
+
+    @Test fun lightsRoundTripAsKhrLightsPunctual() {
+        val s = scene()
+        val spot = app.glbandme.core.scene.LightProxy.create(app.glbandme.core.scene.LightType.SPOT, "Key")
+        spot.light!!.intensity = 42f; spot.light!!.range = 7f; spot.light!!.outerCone = 0.7f; spot.light!!.innerCone = 0.2f
+        spot.position.set(1f, 3f, 2f)
+        spot.rotation.set(Quat.fromEulerDeg(-45f, 20f, 0f))
+        s.add(spot)
+        val sun = app.glbandme.core.scene.LightProxy.create(app.glbandme.core.scene.LightType.SUN, "Sun")
+        s.add(sun)
+        val glb = ExportPipeline.export(s, ExportSettings(format = ExportFormat.GLB)).main
+        val json = String(glb, 20, java.nio.ByteBuffer.wrap(glb).order(java.nio.ByteOrder.LITTLE_ENDIAN).getInt(12))
+        assertTrue(json.contains("KHR_lights_punctual"))
+        assertTrue(json.contains("\"directional\""))
+        val back = SceneIO.import("x.glb", glb).objects
+        val k = back.first { it.name == "Key" }
+        assertEquals(app.glbandme.core.scene.LightType.SPOT, k.light!!.type)
+        assertEquals(42f, k.light!!.intensity, 1e-4f)
+        assertEquals(7f, k.light!!.range, 1e-4f)
+        assertEquals(0.7f, k.light!!.outerCone, 1e-4f)
+        assertEquals(3f, k.position.y, 1e-4f)
+        assertTrue(back.any { it.light?.type == app.glbandme.core.scene.LightType.SUN })
+        // the meshes are still there and lights have no mesh in the file
+        assertEquals(2, back.count { it.light == null })
+        // project files keep lights too
+        val proj = SceneIO.loadProject(SceneIO.saveProject(s))
+        assertEquals(2, proj.objects.count { it.light != null })
+        // mesh formats never contain light stand-ins
+        val stl = ExportPipeline.export(s, ExportSettings(format = ExportFormat.STL)).main
+        val tris = java.nio.ByteBuffer.wrap(stl).order(java.nio.ByteOrder.LITTLE_ENDIAN).getInt(80)
+        assertEquals(s.objects.filter { it.light == null }.sumOf { it.mesh.triangleCount }, tris)
+    }
+
+    @Test fun spotConeAttenuationMatchesSpec() {
+        val l = app.glbandme.core.scene.LightSpec(app.glbandme.core.scene.LightType.SPOT, innerCone = 0.2f, outerCone = 0.5f)
+        val (scale, offset) = l.coneScaleOffset()
+        fun att(angle: Float) = (kotlin.math.cos(angle) * scale + offset).coerceIn(0f, 1f)
+        assertEquals(1f, att(0.1f), 1e-4f)
+        assertEquals(0f, att(0.6f), 1e-4f)
+        assertTrue(att(0.35f) in 0.01f..0.99f)
+    }
 }

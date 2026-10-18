@@ -34,6 +34,11 @@ class MeshPanel(act: EditorActivity) : Panel(act) {
             root.addView(act.label("Select an object to edit its mesh.", 13.5f, Theme.TEXT_DIM).apply { setPadding(0, dp(8), 0, dp(8)) })
             return root
         }
+        if (o.light != null) {
+            root.addView(act.label("This is a light – set its colour and brightness on the Object page.", 14f, Theme.TEXT_DIM).apply { setPadding(dp(2), dp(10), 0, dp(10)) })
+            root.addView(PanelUi.button(act, "Light settings", Icon.BULB) { act.openInspector(EditorActivity.INSPECT_OBJECT) })
+            return root
+        }
         val m = o.mesh
         val stats = act.hbox(0, 8).apply { setPadding(0, dp(6), 0, dp(4)) }
         for ((k, v) in listOf("Triangles" to Fmt.count(m.triangleCount), "Vertices" to Fmt.count(m.vertexCount), "UVs" to if (m.uvs != null) "Yes" else "No")) {

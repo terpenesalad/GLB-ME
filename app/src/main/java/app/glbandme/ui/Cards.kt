@@ -66,8 +66,8 @@ class ActionTile(ctx: Context, val icon: Icon, val title: String, val subtitle: 
 
 /** Project / template card with a square thumbnail. */
 class ThumbCard(ctx: Context) : PressableView(ctx) {
-    var title = ""; set(v) { field = v; invalidate() }
-    var subtitle = ""; set(v) { field = v; invalidate() }
+    var title = ""; set(v) { field = v; describe("$v. $subtitle"); invalidate() }
+    var subtitle = ""; set(v) { field = v; describe("$title. $v"); invalidate() }
     var badge: String? = null; set(v) { field = v; invalidate() }
     var thumb: Bitmap? = null; set(v) { field = v; shader = null; invalidate() }
     var placeholderIcon = Icon.CUBE
@@ -81,7 +81,7 @@ class ThumbCard(ctx: Context) : PressableView(ctx) {
 
     override fun onMeasure(w: Int, h: Int) {
         val width = MeasureSpec.getSize(w)
-        setMeasuredDimension(width, width + dp(58))
+        setMeasuredDimension(width, width + maxOf(dp(58), (sp(14.5f) + sp(11.5f) + dp(28f)).toInt()))
     }
 
     override fun onDraw(c: Canvas) {
@@ -121,9 +121,9 @@ class ThumbCard(ctx: Context) : PressableView(ctx) {
             c.drawText(it, r.left + dp(7f), r.bottom - dp(6.5f), tp)
         }
         tp.typeface = Theme.medium; tp.textSize = sp(14.5f); tp.color = Theme.TEXT
-        c.drawText(TextUtils.ellipsize(title, tp, w - dp(24f), TextUtils.TruncateAt.END).toString(), dp(12f), th + dp(24f), tp)
+        c.drawText(TextUtils.ellipsize(title, tp, w - dp(24f), TextUtils.TruncateAt.END).toString(), dp(12f), th + dp(8f) + sp(14.5f), tp)
         tp.typeface = Theme.regular; tp.textSize = sp(11.5f); tp.color = Theme.TEXT_MUTED
-        c.drawText(TextUtils.ellipsize(subtitle, tp, w - dp(24f), TextUtils.TruncateAt.END).toString(), dp(12f), th + dp(44f), tp)
+        c.drawText(TextUtils.ellipsize(subtitle, tp, w - dp(24f), TextUtils.TruncateAt.END).toString(), dp(12f), th + dp(14f) + sp(14.5f) + sp(11.5f), tp)
     }
 }
 
