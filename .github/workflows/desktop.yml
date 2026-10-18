@@ -90,3 +90,5 @@ jobs:
             gh release create "$TAG" --title "GLB&ME $VERSION" --notes "GLB&ME $VERSION" --target "$GITHUB_SHA"
           fi
           gh release upload "$TAG" artifacts/* --clobber
+          python3 .github/scripts/release_notes.py "$VERSION" > notes.md
+          gh release edit "$TAG" --notes-file notes.md
