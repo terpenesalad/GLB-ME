@@ -312,6 +312,7 @@ export class Editor {
     if (kind === 'sculpt') { this.actions.addShape('SCULPT_SPHERE', { res: 64 }); this.doc.history.clear(); this.setMode('sculpt'); }
     else if (kind === 'text') { await this.actions.addText(); this.doc.history.clear(); setTimeout(() => S.textStudio(this, this.doc.selected), 200); }
     else if (kind?.startsWith('shape:')) { this.actions.addShape(kind.slice(6)); this.doc.history.clear(); }
+    else if (kind?.startsWith('template:')) { const list = await S.templateList(); const t = list.find((x) => x.id === kind.slice(9)); if (t) { await S.insertTemplate(this, t, true); this.doc.setSelection([]); this.doc.history.clear(); } }
   }
   async save(silent = false) {
     if (this.loadFailed || !this.project) return;
@@ -764,4 +765,6 @@ export class Editor {
 export { THREE, isLight, isGroup };
 import { exportModel as _exportModel, buildScene as _buildScene, parseGltf as _parseGltf, importModel as _importModel, zip as _zip } from './io.js';
 import { applyPattern as _ap, defaultSpec as _ds } from './textures.js';
-window.glbmeDebug = { exportModel: _exportModel, buildScene: _buildScene, saveProject, applyPattern: _ap, defaultSpec: _ds, uvOverlap, pipeline: PL, platform, parseGltf: _parseGltf, importModel: _importModel, zip: _zip, studios: S, THREE };
+import * as _T from '../templates/index.js';
+import * as _PBR from '../templates/pbr.js';
+window.glbmeDebug = { exportModel: _exportModel, buildScene: _buildScene, saveProject, applyPattern: _ap, defaultSpec: _ds, uvOverlap, pipeline: PL, platform, parseGltf: _parseGltf, importModel: _importModel, zip: _zip, studios: S, THREE, templates: _T, pbr: _PBR };

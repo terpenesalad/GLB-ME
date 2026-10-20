@@ -9,6 +9,7 @@ import { isMesh, prepareGeometry, makeMesh, newMaterial, syncTextures } from './
 import { PATTERNS, defaultSpec, previewCanvas, applyPattern, imageTexture, applyImage, stickerTexture } from './textures.js';
 import { BUILTIN, cssFamily, importedFonts, systemFonts, importFontFiles, fontName } from './fonts.js';
 import { FORMATS, exportModel, parseGltf, zip } from './io.js';
+import { CATALOG, CATEGORY_ORDER, buildTemplate, findTemplate } from '../templates/index.js';
 import * as PL from './pipeline.js';
 import { platform, IMAGE_FILTERS, FONT_FILTERS, isDesktop } from '../platform.js';
 
@@ -305,32 +306,62 @@ export function stickerDialog(ed) {
   const m = modal({ title: 'Stickers & decals', icon: 'sticker', body });
 }
 
-// =============================================================================== templates (insert)
+// =============================================================================== templates
+/** All templates: the procedural asset library (PBR, editable parts) plus the classic GLB starters. */
 export async function templateList() {
-  const r = await fetch('templates/templates.json'); return r.json();
+  let glb = [];
+  try { glb = await (await fetch('templates/templates.json')).json(); } catch { /* none */ }
+  return [
+    ...CATALOG.map((t) => ({ ...t, kind: 'code', description: t.desc, thumb: `templates/thumbs/${t.id}.webp` })),
+    ...glb.map((t) => ({ ...t, kind: 'glb', category: t.category === 'Nature' ? 'Nature' : t.category, thumb: `templates/${t.id}.png`, tags: [] })),
+  ];
 }
-export async function templatePicker(ed, onPick = null) {
+/** Objects of a template, ready to attach: { objects, clips, frameCount, env }. */
+export async function templateObjects(t) {
+  if (t.kind === 'glb') { const r = await parseGltf(await (await fetch(`templates/${t.id}.glb`)).arrayBuffer()); return { objects: r.objects, clips: r.clips, frameCount: r.frameCount }; }
+  const k = await buildTemplate(t.id);
+  return { objects: k.objects, clips: k.clips, frameCount: k.frameCount, env: t.env };
+}
+/** Adds a template to the scene (fresh = the project was just created from it). */
+export async function insertTemplate(ed, t, fresh = false) {
+  const b = busy((t.kind === 'glb' ? 'Loading ' : 'Building ') + t.name + '…');
+  try {
+    const r = await templateObjects(t);
+    const hadAnim = ed.doc.hasAnimation();
+    ed.actions.addObjects(r.objects, 'Insert ' + t.name);
+    if (!hadAnim && r.frameCount) ed.doc.frameCount = r.frameCount;
+    if (!hadAnim && r.clips?.length) ed.doc.clips = r.clips;
+    if (fresh && r.env) { ed.vp.render.env = r.env; ed.vp.applyRender(); }
+    ed.vp.updateKeyLight?.();
+    ed.vp.frame(r.objects.filter((o) => !r.objects.includes(o.ed.parent)));
+    ed.refresh?.();
+  } finally { b.close(); }
+}
+/** Searchable, categorised template browser. onPick(t) is called with the chosen entry. */
+export async function templateBrowser({ title = 'Templates', onPick }) {
   const list = await templateList();
-  const cats = ['All', ...new Set(list.map((t) => t.category))];
-  let cat = 'All';
-  const grid = h('div', { class: 'grid', style: { gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))' } });
-  const fill = () => mount(grid, list.filter((t) => cat === 'All' || t.category === cat).map((t) => h('button', { class: 'pcard', style: { textAlign: 'left', padding: 0, border: '1px solid var(--stroke)', color: 'var(--text)' }, onclick: async () => {
-    m.close();
-    if (onPick) return onPick(t);
-    const b = busy('Loading ' + t.name + '…');
-    try {
-      const data = await (await fetch(`templates/${t.id}.glb`)).arrayBuffer();
-      const r = await parseGltf(data);
-      const hadAnim = ed.doc.hasAnimation();
-      ed.actions.addObjects(r.objects, 'Insert ' + t.name);
-      if (r.frameCount && !hadAnim) ed.doc.frameCount = r.frameCount;
-      ed.vp.frame(ed.doc.objects);
-    } finally { b.close(); }
-  } }, h('div', { class: 'thumb' }, h('img', { src: `templates/${t.id}.png`, alt: '', loading: 'lazy', onerror: (e) => { e.target.replaceWith(icon('box')); } })), t.animated ? h('span', { class: 'badge' }, 'Animated') : null, h('div', { class: 'meta' }, h('b', null, t.name), h('span', null, t.description)))));
-  const chips = h('div', { class: 'chips', style: { marginBottom: '14px' } }, cats.map((c) => h('button', { class: 'chip' + (c === cat ? ' active' : ''), onclick: (e) => { cat = c; [...chips.children].forEach((x) => x.classList.remove('active')); e.currentTarget.classList.add('active'); fill(); } }, c)));
+  const counts = new Map(); for (const t of list) counts.set(t.category, (counts.get(t.category) || 0) + 1);
+  const cats = ['All', ...CATEGORY_ORDER.filter((c) => counts.has(c)), ...[...counts.keys()].filter((c) => !CATEGORY_ORDER.includes(c))];
+  let cat = 'All', q = '';
+  const grid = h('div', { class: 'grid tgrid', role: 'list' });
+  const empty = h('p', { class: 'muted', style: { display: 'none', padding: '24px 4px' } }, 'No templates match your search.');
+  const card = (t) => h('button', { class: 'pcard tcard', role: 'listitem', 'aria-label': `${t.name} – ${t.category}. ${t.description}`, onclick: () => { m.close(); onPick(t); } },
+    h('div', { class: 'thumb' }, h('img', { src: t.thumb, alt: '', loading: 'lazy', onerror: (e) => { e.target.replaceWith(icon(t.kind === 'code' ? 'building-2' : 'box')); } })),
+    t.animated ? h('span', { class: 'badge' }, 'Animated') : null,
+    h('div', { class: 'meta' }, h('b', null, t.name), h('span', null, t.description)));
+  const fill = () => {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    const shown = list.filter((t) => (cat === 'All' || t.category === cat) && words.every((w) => [t.name, t.description, t.category, ...(t.tags || [])].join(' ').toLowerCase().includes(w)));
+    mount(grid, shown.map(card)); empty.style.display = shown.length ? 'none' : '';
+  };
+  const chips = h('div', { class: 'chips tchips', role: 'tablist', 'aria-label': 'Template categories' }, cats.map((c) => h('button', { class: 'chip' + (c === cat ? ' active' : ''), role: 'tab', 'aria-selected': String(c === cat), onclick: (e) => { cat = c; [...chips.children].forEach((x) => { x.classList.remove('active'); x.setAttribute('aria-selected', 'false'); }); e.currentTarget.classList.add('active'); e.currentTarget.setAttribute('aria-selected', 'true'); fill(); } }, c, c !== 'All' ? h('span', { class: 'count' }, String(counts.get(c))) : null)));
+  const search = h('input', { class: 'field tsearch', type: 'search', placeholder: `Search ${list.length} templates – try “tram”, “terrace”, “kangaroo”…`, 'aria-label': 'Search templates', oninput: (e) => { q = e.target.value; fill(); }, onkeydown: (e) => { if (e.key === 'Enter') grid.querySelector('button')?.click(); } });
   fill();
-  const m = modal({ title: 'Templates', icon: 'layout-template', body: h('div', null, chips, grid), wide: true });
+  const m = modal({ title, icon: 'layout-template', body: h('div', { class: 'tbrowser' }, search, chips, grid, empty), wide: true });
+  setTimeout(() => search.focus(), 30);
+  return m;
 }
+export function templatePicker(ed) { return templateBrowser({ title: 'Insert template', onPick: (t) => insertTemplate(ed, t) }); }
 
 // =============================================================================== export
 export const EXPORT_PRESETS = [

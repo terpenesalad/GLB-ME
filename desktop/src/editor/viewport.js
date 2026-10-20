@@ -6,20 +6,28 @@ import * as THREE from 'three';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { isMesh, isLight, isCamera, isGroup, frameBounds } from './model.js';
 import { matcapTexture } from './textures.js';
 import { SculptEngine } from '../core/sculpt.js';
 import { texelDensity, sampleColor } from './texpaint.js';
 import { FaceSelection } from '../core/faces.js';
 
-export const ENVS = [['STUDIO', 'Studio'], ['SUNSET', 'Sunset'], ['OVERCAST', 'Overcast'], ['NIGHT', 'Night'], ['NEON', 'Neon'], ['DARK', 'Lights only']];
+export const ENVS = [['STUDIO', 'Studio'], ['PHOTO', 'Photo studio'], ['DAYLIGHT', 'Daylight'], ['CITY', 'City street'], ['PARK', 'Park'], ['GOLDEN', 'Golden hour'], ['DAWN', 'Dawn'], ['SUNSET', 'Sunset'], ['OVERCAST', 'Overcast'], ['NIGHT', 'Night'], ['NEON', 'Neon'], ['DARK', 'Lights only']];
+/** Real-world HDR panoramas (CC0, Poly Haven) shipped in hdri/. */
+export const HDRIS = { PHOTO: 'studio_small_03_1k', DAYLIGHT: 'lebombo_1k', CITY: 'potsdamer_platz_1k', PARK: 'rooitou_park_1k', GOLDEN: 'venice_sunset_1k', DAWN: 'kiara_1_dawn_1k' };
+const hdrCache = new Map();
+function loadHdr(name) { if (!hdrCache.has(name)) hdrCache.set(name, new RGBELoader().loadAsync(`hdri/${name}.hdr`).then((t) => { t.mapping = THREE.EquirectangularReflectionMapping; return t; })); return hdrCache.get(name); }
 export const SHADING = [['PBR', 'Realistic', 'sun'], ['MATCAP', 'Matcap', 'circle'], ['FLAT_CLAY', 'Clay', 'cloud'], ['NORMALS', 'Normals', 'compass'], ['UNLIT', 'Unlit', 'lightbulb-off']];
 export const BACKGROUNDS = [[0x2B2E3A, 0x101116], [0x3a3f4f, 0x1b1d24], [0xf2f2f5, 0xc9cad2], [0x1d2b4a, 0x070a12], [0x4a2f5c, 0x120a1a], [0x000000, 0x000000]];
 /** Axis colours: standard (red/green/blue) and colour-blind safe (Okabe–Ito vermillion/yellow/blue). */
 export const AXIS_COLORS = { standard: [0xff5a67, 0x7cdb72, 0x5b95ff], cvd: [0xe86a10, 0xf0e442, 0x2f8fdb] };
 
 export function defaultRender() {
-  return { shading: 'PBR', matcap: 0, env: 'STUDIO', exposure: 1, lightAngle: -40, lightHeight: 45, shadows: true, grid: true, wireframe: false, bgTop: 0x2B2E3A, bgBottom: 0x101116, ortho: false, fov: 45, axes: true, envRotation: 0, envIntensity: 1, xray: false };
+  return { shading: 'PBR', matcap: 0, env: 'STUDIO', exposure: 1, lightAngle: -40, lightHeight: 45, shadows: true, grid: true, wireframe: false, bgTop: 0x2B2E3A, bgBottom: 0x101116, ortho: false, fov: 45, axes: true, envRotation: 0, envIntensity: 1, xray: false, ao: true, envBg: false, envBlur: 0.04 };
 }
 
 export class Viewport {
@@ -160,8 +168,8 @@ export class Viewport {
   applyRender() {
     const rs = this.render, r = this.renderer;
     r.toneMappingExposure = rs.exposure;
-    this.setEnv(rs.env);
     this.updateBackground();
+    this.setEnv(rs.env);
     this.grid.visible = rs.grid;
     this.ground.visible = rs.shadows; this.key.castShadow = rs.shadows;
     this.persp.fov = rs.fov; this.persp.updateProjectionMatrix();
@@ -184,25 +192,54 @@ export class Viewport {
     const ctx = c.getContext('2d'), g = ctx.createLinearGradient(0, 0, 0, 256);
     g.addColorStop(0, '#' + rs.bgTop.toString(16).padStart(6, '0')); g.addColorStop(1, '#' + rs.bgBottom.toString(16).padStart(6, '0'));
     ctx.fillStyle = g; ctx.fillRect(0, 0, 4, 256);
-    this.scene.background?.dispose?.();
+    if (this.scene.background?.isCanvasTexture) this.scene.background.dispose();
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-    this.scene.background = t;
+    this.bgTex = t;
+    if (rs.envBg && this.envEquirect) return; // panorama background stays
+    this.scene.background = t; this.scene.backgroundBlurriness = 0; this.scene.backgroundIntensity = 1;
     const lum = ((rs.bgTop >> 16 & 255) + (rs.bgTop >> 8 & 255) + (rs.bgTop & 255)) / 765;
     this.gridMat.uniforms.uColor.value.set(lum > 0.6 ? 0x3c3f4a : 0x9aa0b4);
   }
   setEnv(id) {
-    if (this.envId === id && this.scene.environment) { this.scene.environmentRotation.y = THREE.MathUtils.degToRad(this.render.envRotation || 0); this.scene.environmentIntensity = this.render.envIntensity ?? 1; return; }
+    const rs = this.render;
+    if (this.envId === id && (this.scene.environment || id === 'DARK')) { this.scene.environmentRotation.y = THREE.MathUtils.degToRad(rs.envRotation || 0); this.scene.environmentIntensity = rs.envIntensity ?? 1; this.applyEnvBackground(); return; }
     this.envId = id;
     if (this.envTex) { this.envTex.dispose(); this.envTex = null; }
-    if (id === 'DARK') { this.scene.environment = null; this.hemi.intensity = 0.06; this.key.intensity = 0.25; return; }
+    this.envEquirect = null;
+    if (id === 'DARK') { this.scene.environment = null; this.hemi.intensity = 0.06; this.key.intensity = 0.25; this.applyEnvBackground(); return; }
     this.hemi.intensity = 0;
+    this.scene.environmentRotation.y = THREE.MathUtils.degToRad(rs.envRotation || 0);
+    this.scene.environmentIntensity = rs.envIntensity ?? 1;
+    this.key.intensity = { STUDIO: 1.6, SUNSET: 2.2, OVERCAST: 0.9, NIGHT: 0.6, NEON: 0.8, PHOTO: 0.8, DAYLIGHT: 1.6, CITY: 1.1, PARK: 1.4, GOLDEN: 1.6, DAWN: 1.0 }[id] ?? 1.5;
+    this.key.color.set({ SUNSET: 0xffc79a, GOLDEN: 0xffcf9e, DAWN: 0xffd9c2, NIGHT: 0x9db4ff }[id] ?? 0xffffff);
+    if (HDRIS[id]) {
+      const want = id;
+      this.envReady = loadHdr(HDRIS[id]).then((eq) => {
+        if (this.disposed || this.envId !== want) return;
+        if (this.envTex) this.envTex.dispose();
+        this.envTex = this.pmrem.fromEquirectangular(eq).texture;
+        this.envEquirect = eq;
+        this.scene.environment = this.envTex;
+        this.applyEnvBackground(); this.requestRender();
+      }).catch((e) => console.warn('HDRI', e));
+      return;
+    }
     const envScene = id === 'STUDIO' ? new RoomEnvironment() : gradientEnv(id);
     this.envTex = this.pmrem.fromScene(envScene, 0.035).texture;
     this.scene.environment = this.envTex;
-    this.scene.environmentRotation.y = THREE.MathUtils.degToRad(this.render.envRotation || 0);
-    this.scene.environmentIntensity = this.render.envIntensity ?? 1;
-    this.key.intensity = { STUDIO: 1.6, SUNSET: 2.2, OVERCAST: 0.9, NIGHT: 0.6, NEON: 0.8 }[id] ?? 1.5;
-    this.key.color.set(id === 'SUNSET' ? 0xffc79a : id === 'NIGHT' ? 0x9db4ff : 0xffffff);
+    this.envReady = Promise.resolve();
+    this.applyEnvBackground();
+  }
+  /** Shows the HDR panorama behind the model (optional) or the gradient backdrop. */
+  applyEnvBackground() {
+    const rs = this.render;
+    if (rs.envBg && this.envEquirect) {
+      if (this.scene.background && this.scene.background !== this.envEquirect) this.scene.background.dispose?.();
+      this.scene.background = this.envEquirect;
+      this.scene.backgroundBlurriness = rs.envBlur ?? 0.04;
+      this.scene.backgroundIntensity = rs.envIntensity ?? 1;
+      this.scene.backgroundRotation.y = THREE.MathUtils.degToRad(rs.envRotation || 0);
+    } else if (!this.scene.background || this.scene.background === this.envEquirect || this.scene.background.isDataTexture) this.updateBackground();
   }
   updateKeyLight() {
     const rs = this.render, box = frameBounds(this.doc.objects, this.doc);
@@ -214,6 +251,7 @@ export class Viewport {
     const sc = this.key.shadow.camera; sc.left = sc.bottom = -size; sc.right = sc.top = size; sc.near = 0.01; sc.far = size * 5; sc.updateProjectionMatrix();
     const y = box.isEmpty() ? 0 : Math.min(0, box.min.y);
     this.ground.position.set(c.x, y - 0.0005, c.z); this.ground.scale.setScalar(size * 6);
+    this.setAORadius(THREE.MathUtils.clamp(size * 0.035, 0.015, 1.2));
   }
 
   // ------------------------------------------------------------------------- camera
@@ -221,6 +259,7 @@ export class Viewport {
     const p = this.canvas.parentElement; const w = p.clientWidth, hh = p.clientHeight;
     if (!w || !hh) return;
     this.renderer.setSize(w, hh, false);
+    this.composer?.setSize(w, hh);
     this.persp.aspect = w / hh; this.persp.updateProjectionMatrix();
     this.updateCamera(); this.requestRender();
   }
@@ -841,17 +880,57 @@ export class Viewport {
     this.doc.root.updateMatrixWorld(true);
     this.updateOverlays();
     const swap = this.swapMaterials();
-    this.renderer.setRenderTarget(target);
-    this.renderer.render(this.scene, camera);
-    this.renderer.setRenderTarget(null);
+    let done = false;
+    if (!target && this.useAO(camera)) {
+      try {
+        const c = this.composer || this.makeComposer();
+        this.renderPass.camera = camera; this.aoPass.camera = camera;
+        c.render(); done = true;
+      } catch (e) { this.aoFailed = true; console.warn(e); }
+    }
+    if (!done) {
+      this.renderer.setRenderTarget(target);
+      this.renderer.render(this.scene, camera);
+      this.renderer.setRenderTarget(null);
+    }
     for (const [o, m] of swap) o.material = m;
   }
+  /** Ambient occlusion (GTAO) is used for realistic shading in perspective views. */
+  useAO(camera) { return this.render.ao && this.render.shading === 'PBR' && !this.render.xray && camera.isPerspectiveCamera && !this.aoFailed; }
+  /** Overlays (grid, gizmo, outlines, helpers) never cast ambient occlusion. */
+  aoHidden() { return [this.grid, this.axes, this.gizmoHelper, this.outlines, this.helpers, this.faceOverlay, this.maskOverlay, this.wires, this.measureGroup]; }
+  makeAOPasses(composer, w, h, camera, noOutput = false) {
+    const rp = new RenderPass(this.scene, camera);
+    const ao = new GTAOPass(this.scene, camera, w, h);
+    const hidden = this.aoHidden(), base = ao.overrideVisibility.bind(ao), restore = ao.restoreVisibility.bind(ao);
+    ao.overrideVisibility = () => { base(); for (const o of hidden) { ao._visibilityCache.set(o, o.visible); o.visible = false; } };
+    ao.restoreVisibility = () => { restore(); };
+    ao.blendIntensity = 1;
+    ao.updateGtaoMaterial({ radius: this.aoRadius || 0.25, distanceExponent: 1, thickness: 1, scale: 1, samples: 16 });
+    ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+    composer.addPass(rp); composer.addPass(ao);
+    if (!noOutput) composer.addPass(new OutputPass());
+    return { rp, ao };
+  }
+  makeComposer() {
+    try {
+      const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+      const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+      const c = new EffectComposer(this.renderer, rt);
+      c.setPixelRatio(this.renderer.getPixelRatio());
+      const sz = this.renderer.getSize(new THREE.Vector2()); c.setSize(sz.x, sz.y);
+      const { rp, ao } = this.makeAOPasses(c, size.x, size.y, this.camera);
+      this.composer = c; this.renderPass = rp; this.aoPass = ao;
+      return c;
+    } catch (e) { console.warn('AO unavailable', e); this.aoFailed = true; throw e; }
+  }
+  setAORadius(r) { this.aoRadius = r; this.aoPass?.updateGtaoMaterial({ radius: r }); }
 
   /**
    * Renders the scene from the current view (or a square framing for thumbnails) without editor
    * overlays, tone-mapped like the viewport. Returns PNG bytes.
    */
-  async renderImage({ width = 1920, height = 1080, transparent = false, framed = false } = {}) {
+  async renderImage({ width = 1920, height = 1080, transparent = false, framed = false, fit = 1.2, yaw = null, pitch = null, target = null } = {}) {
     const max = Math.min(this.renderer.capabilities.maxTextureSize, 8192);
     const k = Math.min(1, max / Math.max(width, height)); width = Math.max(16, Math.round(width * k)); height = Math.max(16, Math.round(height * k));
     let cam;
@@ -859,8 +938,9 @@ export class Viewport {
       const box = frameBounds(this.doc.objects, this.doc);
       cam = new THREE.PerspectiveCamera(this.render.fov, width / height, 0.01, 1000);
       const sphere = box.isEmpty() ? new THREE.Sphere(new THREE.Vector3(0, 0.5, 0), 1) : box.getBoundingSphere(new THREE.Sphere());
-      const d = Math.max(0.05, sphere.radius) / Math.sin(THREE.MathUtils.degToRad(this.render.fov) / 2) * 1.2;
-      const y = THREE.MathUtils.degToRad(this.cam.yaw), p = THREE.MathUtils.degToRad(Math.max(-60, Math.min(60, this.cam.pitch)));
+      if (target) sphere.center.fromArray(target);
+      const d = Math.max(0.05, sphere.radius) / Math.sin(THREE.MathUtils.degToRad(this.render.fov) / 2) * fit;
+      const y = THREE.MathUtils.degToRad(yaw ?? this.cam.yaw), p = THREE.MathUtils.degToRad(Math.max(-60, Math.min(60, pitch ?? this.cam.pitch)));
       cam.position.set(Math.sin(y) * Math.cos(p), Math.sin(p), Math.cos(y) * Math.cos(p)).multiplyScalar(d).add(sphere.center);
       cam.lookAt(sphere.center); cam.near = d / 100; cam.far = d * 10; cam.updateProjectionMatrix();
     } else {
@@ -876,11 +956,17 @@ export class Viewport {
     const out = new THREE.WebGLRenderTarget(width, height);
     const clear = this.renderer.getClearAlpha();
     this.doc.root.updateMatrixWorld(true);
-    const swap = this.swapMaterials();
+    const swap = this.swapMaterials(), disposers = [];
     try {
       this.renderer.setClearAlpha(transparent ? 0 : 1);
-      this.renderer.setRenderTarget(rt); this.renderer.clear(); this.renderer.render(this.scene, cam);
-      const pass = new OutputPass(); pass.renderToScreen = false; pass.render(this.renderer, out, rt); pass.dispose();
+      let src = rt;
+      if (!transparent && this.useAO(cam)) {
+        const comp = new EffectComposer(this.renderer, rt.clone()); comp.renderToScreen = false; comp.setPixelRatio(1); comp.setSize(width, height);
+        this.makeAOPasses(comp, width, height, cam, true);
+        comp.passes[1].updateGtaoMaterial({ radius: this.aoRadius || 0.25 });
+        comp.render(); src = comp.readBuffer; disposers.push(() => comp.dispose());
+      } else { this.renderer.setRenderTarget(rt); this.renderer.clear(); this.renderer.render(this.scene, cam); }
+      const pass = new OutputPass(); pass.renderToScreen = false; pass.render(this.renderer, out, src); pass.dispose();
       this.renderer.setRenderTarget(null);
       const px = new Uint8Array(width * height * 4);
       this.renderer.readRenderTargetPixels(out, 0, 0, width, height, px);
@@ -895,7 +981,7 @@ export class Viewport {
     } finally {
       for (const [o, m] of swap) o.material = m;
       this.renderer.setRenderTarget(null); this.renderer.setClearAlpha(clear);
-      rt.dispose(); out.dispose();
+      rt.dispose(); out.dispose(); for (const f of disposers) f();
       this.scene.background = bg;
       hide.forEach((x, i) => { x.visible = vis[i]; });
       this.requestRender();
@@ -903,7 +989,7 @@ export class Viewport {
   }
   /** PNG thumbnail of the current scene (square, framed). */
   thumbnail(size = 512) { return this.renderImage({ width: size, height: size, framed: true }); }
-  dispose() { this.disposed = true; this.ro?.disconnect(); this.gizmo.dispose(); this.envTex?.dispose(); this.pmrem.dispose(); this.renderer.dispose(); this.renderer.forceContextLoss?.(); this.measureLabel.remove(); this.boxEl.remove(); this.lineEl.remove(); this.nav.dispose(); }
+  dispose() { this.disposed = true; this.ro?.disconnect(); this.gizmo.dispose(); this.envTex?.dispose(); this.composer?.dispose(); this.pmrem.dispose(); this.renderer.dispose(); this.renderer.forceContextLoss?.(); this.measureLabel.remove(); this.boxEl.remove(); this.lineEl.remove(); this.nav.dispose(); }
 }
 
 // ------------------------------------------------------------------------------- helper meshes

@@ -6,7 +6,7 @@ import { isMesh, isLight, isCamera, isGroup, syncTextures, ANIM_PRESETS, applyPr
 import { SHAPES } from '../core/shapes.js';
 import { BRUSHES, FALLOFFS, MaskOps } from '../core/sculpt.js';
 import { UV_MODES } from '../core/mesh.js';
-import { ENVS, SHADING, BACKGROUNDS } from './viewport.js';
+import { ENVS, HDRIS, SHADING, BACKGROUNDS } from './viewport.js';
 import { MATCAPS, matcapTexture, previewCanvas, clearMaps, bumpFromColor, applyPattern, imageTexture } from './textures.js';
 import { PALETTE, analyzeMesh } from './actions.js';
 import { colorPicker } from '../ui/color.js';
@@ -539,7 +539,12 @@ function scenePanel(ed) {
   out.push(section('Environment lighting'), h('div', { class: 'chips' }, ENVS.map(([id, label]) => h('button', { class: 'chip' + (rs.env === id ? ' active' : ''), 'aria-pressed': String(rs.env === id), onclick: () => { set('env', id); renderInspector(ed); } }, label))));
   out.push(slider({ label: 'Exposure', min: 0.2, max: 3, step: 0.01, value: rs.exposure, onInput: (v) => set('exposure', v, false) || (vp.renderer.toneMappingExposure = v) }));
   out.push(slider({ label: 'Environment rotation', min: -180, max: 180, step: 1, unit: '°', value: rs.envRotation || 0, onInput: (v) => { rs.envRotation = v; vp.scene.environmentRotation.y = D.degToRad(v); vp.scene.backgroundRotation.y = D.degToRad(v); vp.requestRender(); } }));
-  out.push(slider({ label: 'Environment strength', min: 0, max: 3, step: 0.01, value: rs.envIntensity ?? 1, onInput: (v) => { rs.envIntensity = v; vp.scene.environmentIntensity = v; vp.requestRender(); } }));
+  out.push(slider({ label: 'Environment strength', min: 0, max: 3, step: 0.01, value: rs.envIntensity ?? 1, onInput: (v) => { rs.envIntensity = v; vp.scene.environmentIntensity = v; if (rs.envBg) vp.scene.backgroundIntensity = v; vp.requestRender(); } }));
+  if (HDRIS[rs.env]) {
+    out.push(toggle('Show panorama as background', !!rs.envBg, (v) => { rs.envBg = v; d.dirty = true; vp.applyEnvBackground(); vp.requestRender(); renderInspector(ed); }, 'Real photo backdrop – handy for judging materials in context'));
+    if (rs.envBg) out.push(slider({ label: 'Background blur', min: 0, max: 1, step: 0.01, value: rs.envBlur ?? 0.04, onInput: (v) => { rs.envBlur = v; vp.scene.backgroundBlurriness = v; vp.requestRender(); } }));
+  }
+  out.push(toggle('Ambient occlusion', rs.ao !== false, (v) => set('ao', v, false), 'Soft contact shadows in corners and creases (realistic shading)'));
   out.push(section('Key light'), slider({ label: 'Direction', min: -180, max: 180, step: 1, unit: '°', value: rs.lightAngle, onInput: (v) => { rs.lightAngle = v; vp.updateKeyLight(); vp.requestRender(); } }),
     slider({ label: 'Height', min: 5, max: 90, step: 1, unit: '°', value: rs.lightHeight, onInput: (v) => { rs.lightHeight = v; vp.updateKeyLight(); vp.requestRender(); } }),
     toggle('Shadows', rs.shadows, (v) => set('shadows', v)));

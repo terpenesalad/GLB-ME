@@ -132,7 +132,7 @@ export class Actions {
   }
   /** Adds imported objects (already parented among themselves through ed.parent). */
   addObjects(objs, label) {
-    this.doc.transact(label, () => { for (const o of objs) { o.name = this.doc.uniqueName(o.name || 'Mesh'); this.doc.attach(o); } this.doc.setSelection(objs.filter((o) => !objs.includes(o.ed.parent))); }, []);
+    this.doc.transact(label, () => { for (const o of objs) { if (!objs.includes(o.ed.parent)) o.name = this.doc.uniqueName(o.name || 'Mesh'); else o.name = o.name || 'Mesh'; this.doc.attach(o); } this.doc.setSelection(objs.filter((o) => !objs.includes(o.ed.parent))); }, []);
   }
 
   // ------------------------------------------------------------------ selection

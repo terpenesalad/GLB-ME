@@ -2,7 +2,7 @@
 import { h, icon, ibtn, btn, mount, modal, menu, toast, seg, toggle, section, promptDialog, confirmDialog, busy } from './ui/dom.js';
 import { platform, isDesktop, MODEL_FILTERS } from './platform.js';
 import { Editor } from './editor/editor.js';
-import { templateList } from './editor/studios.js';
+import { templateBrowser } from './editor/studios.js';
 import { bytes } from './editor/studios.js';
 
 const SETTINGS_KEY = 'glbandme.settings';
@@ -57,7 +57,7 @@ class App {
         h('div', { class: 'create-row' },
           create('', 'plus', 'New project', 'Start from an empty scene', () => this.newProject(), 'linear-gradient(135deg,#6e56f7,#9b5cf6)'),
           create('', 'brush', 'Sculpt', 'Clay ball, ready for brushes', () => this.newProject('Sculpt', 'sculpt'), 'linear-gradient(135deg,#0ea5a4,#22c55e)'),
-          create('', 'layout-template', 'Templates', '20 ready-made models', () => this.templates(), 'linear-gradient(135deg,#f97316,#f43f5e)'),
+          create('', 'layout-template', 'Templates', 'Buildings, trams, rooms, animals…', () => this.templates(), 'linear-gradient(135deg,#f97316,#f43f5e)'),
           create('', 'download', 'Import', 'GLB, glTF, OBJ, FBX, DAE, 3MF, STL, PLY', () => this.importNew(), 'linear-gradient(135deg,#3b82f6,#06b6d4)')),
         h('div', { class: 'quick', style: { marginTop: '14px' } }, h('span', { class: 'muted', style: { alignSelf: 'center', marginRight: '4px' } }, 'Quick start:'),
           ...[['type', '3D text', 'text'], ['box', 'Cube', 'shape:CUBE'], ['square', 'Rounded box', 'shape:ROUNDED_BOX'], ['circle', 'Sphere', 'shape:SPHERE'], ['torus', 'Torus', 'shape:TORUS'], ['mountain', 'Terrain', 'shape:TERRAIN'], ['star', 'Star', 'shape:STAR']].map(([ic, l, k]) => h('button', { class: 'chip', onclick: () => this.newProject(l, k) }, icon(ic), l))),
@@ -162,20 +162,10 @@ class App {
 
   // ===================================================================== templates
   async templates() {
-    const list = await templateList();
-    const cats = ['All', ...new Set(list.map((t) => t.category))];
-    let cat = 'All';
-    const grid = h('div', { class: 'grid', style: { gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' } });
-    const fill = () => mount(grid, list.filter((t) => cat === 'All' || t.category === cat).map((t) => h('button', { class: 'pcard', style: { textAlign: 'left', padding: 0, color: 'var(--text)' }, onclick: () => this.fromTemplate(t, m) },
-      h('div', { class: 'thumb' }, h('img', { src: `templates/${t.id}.png`, alt: '', loading: 'lazy', onerror: (e) => e.target.replaceWith(icon('box')) })),
-      t.animated ? h('span', { class: 'badge' }, 'Animated') : null,
-      h('div', { class: 'meta' }, h('b', null, t.name), h('span', null, t.description)))));
-    const chips = h('div', { class: 'chips', style: { marginBottom: '16px' } }, cats.map((c) => h('button', { class: 'chip' + (c === cat ? ' active' : ''), onclick: (e) => { cat = c; [...chips.children].forEach((x) => x.classList.remove('active')); e.currentTarget.classList.add('active'); fill(); } }, c)));
-    fill();
-    const m = modal({ title: 'Templates', icon: 'layout-template', body: h('div', null, chips, grid), wide: true });
+    await templateBrowser({ title: 'New from template', onPick: (t) => this.fromTemplate(t) });
   }
-  async fromTemplate(t, m) {
-    m.close();
+  async fromTemplate(t) {
+    if (t.kind === 'code') return this.newProject(t.name, 'template:' + t.id);
     const data = await (await fetch(`templates/${t.id}.glb`)).arrayBuffer();
     const p = await platform.projects.create({ name: this.uniqueProjectName(t.name) });
     this.openEditor(p, data);

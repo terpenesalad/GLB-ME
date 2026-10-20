@@ -35,7 +35,8 @@ for (const f of fontPkgs) {
   fs.copyFileSync(path.join(dir, file), path.join(dist, 'fonts', f + '.woff'));
 }
 for (const w of [400, 500, 600, 700]) fs.copyFileSync(path.join(root, `node_modules/@fontsource/inter/files/inter-latin-${w}-normal.woff2`), path.join(dist, 'fonts', `inter-latin-${w}-normal.woff2`));
-for (const f of fs.readdirSync(path.join(root, 'assets/templates'))) fs.copyFileSync(path.join(root, 'assets/templates', f), path.join(dist, 'templates', f));
+// templates, baked PBR material textures and HDR panoramas
+for (const d of ['templates', 'materials', 'hdri']) if (fs.existsSync(path.join(root, 'assets', d))) fs.cpSync(path.join(root, 'assets', d), path.join(dist, d), { recursive: true });
 const licence = 'Bundled fonts are licensed under the SIL Open Font License 1.1 (see https://openfontlicense.org). Icons: Lucide (ISC).\n';
 fs.writeFileSync(path.join(dist, 'fonts', 'LICENSES.txt'), licence);
 
