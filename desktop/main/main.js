@@ -81,8 +81,34 @@ function showError(msg, reloadable = false) {
 
 // ---- single instance + "open with" ---------------------------------------------------------
 const fileArgs = (argv) => argv.filter((a) => /\.(glb|gltf|obj|stl|ply|fbx)$/i.test(a) && fs.existsSync(a));
+// The first desktop build (GLB&ME.exe) could get stuck running invisibly in the background, which
+// holds the single-instance lock so every later launch quit silently. A healthy instance writes a
+// heartbeat file; if the lock is busy but there's no fresh heartbeat, the old process is cleared.
+const heartbeatFile = () => path.join(app.getPath('userData'), 'running.json');
+function healthyInstanceRunning() {
+  try { const hb = JSON.parse(fs.readFileSync(heartbeatFile(), 'utf8')); return Date.now() - hb.t < 6000 && hb.pid !== process.pid; } catch { return false; }
+}
+function killOtherInstances() {
+  if (process.platform !== 'win32') return false;
+  const { execFileSync } = require('child_process');
+  let killed = false;
+  for (const image of ['GLB&ME.exe', 'GLB-ME.exe']) {
+    try {
+      const list = execFileSync('tasklist', ['/FI', `IMAGENAME eq ${image}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true });
+      const pids = [...list.matchAll(/^"[^"]+","(\d+)"/gm)].map((m) => +m[1]).filter((pid) => pid !== process.pid);
+      for (const pid of pids) { try { execFileSync('taskkill', ['/F', '/T', '/PID', String(pid)], { windowsHide: true }); killed = true; } catch { /* gone */ } }
+    } catch (e) { log('tasklist', e); }
+  }
+  return killed;
+}
 const gotLock = app.requestSingleInstanceLock();
-if (!gotLock) { app.quit(); }
+if (!gotLock) {
+  const retry = process.argv.includes('--glbme-retry');
+  log('single-instance lock busy', retry ? '(retry)' : '');
+  if (healthyInstanceRunning()) app.quit(); // the running window brings itself to the front
+  else if (!retry && killOtherInstances()) { app.relaunch({ args: [...process.argv.slice(1), '--glbme-retry'] }); app.exit(0); }
+  else app.whenReady().then(() => { dialog.showErrorBox('GLB&ME is already running', 'Another copy of GLB&ME seems stuck in the background. Restart your PC (or end “GLB&ME” in Task Manager) and open it again.'); app.quit(); });
+}
 else {
   app.on('second-instance', (_e, argv) => {
     const files = fileArgs(argv);
@@ -102,6 +128,9 @@ app.on('open-file', (e, file) => {
 
 if (gotLock) app.whenReady().then(() => {
   log('start', app.getVersion(), process.platform, process.arch, process.versions.electron);
+  const beat = () => { try { fs.writeFileSync(heartbeatFile(), JSON.stringify({ pid: process.pid, t: Date.now() })); } catch { /* ignore */ } };
+  beat(); setInterval(beat, 2000).unref();
+  app.on('will-quit', () => { try { fs.rmSync(heartbeatFile(), { force: true }); } catch { /* ignore */ } });
   // serve the bundled UI straight from the app archive (works inside app.asar on every OS)
   protocol.handle('app', (req) => {
     try {

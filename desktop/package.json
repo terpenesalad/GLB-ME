@@ -126,7 +126,8 @@
       "artifactName": "GLB-ME-Setup-${version}.${ext}",
       "uninstallDisplayName": "GLB&ME",
       "deleteAppDataOnUninstall": false,
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "include": "build/installer.nsh"
     },
     "portable": {
       "artifactName": "GLB-ME-${version}-portable.${ext}"
