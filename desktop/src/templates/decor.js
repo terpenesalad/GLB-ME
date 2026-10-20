@@ -176,10 +176,10 @@ export function signTexture(lines, st = {}) {
 
 // ------------------------------------------------------------------------------- foliage
 /** Leaf cluster card (alpha cut-out). kind: 'gum' | 'plane' | 'round' | 'palm' | 'grass' | 'hedge' */
-export function leafTexture(kind = 'round') {
-  return memo('leaf:' + kind, () => {
+export function leafTexture(kind = 'round', { bg = null } = {}) {
+  return memo('leaf:' + kind + (bg || ''), () => {
     const S = 512, c = canvas(S, S), x = c.getContext('2d'), nz = new Noise(kind.length * 7), r = (() => { let s = kind.length * 99 + 7; return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; })();
-    const cols = { gum: ['#6f8466', '#8a9a74', '#5d7357', '#a2ab86'], plane: ['#4f7a2e', '#6b9238', '#3f6526', '#88a84a'], round: ['#3f6f2a', '#5a8a35', '#2f5a22', '#77a046'], palm: ['#4d6f2c', '#6a8a3a', '#3d5a24'], grass: ['#5c7f2e', '#7e9a42', '#46682a', '#9aa85a'], hedge: ['#2f5a26', '#3f6f2e', '#24461e', '#4f7f36'] }[kind];
+    const cols = { gum: ['#55684c', '#6b7a58', '#46593f', '#7e8a63'], plane: ['#4f7a2e', '#6b9238', '#3f6526', '#88a84a'], round: ['#3f6f2a', '#5a8a35', '#2f5a22', '#77a046'], palm: ['#4d6f2c', '#6a8a3a', '#3d5a24'], grass: ['#5c7f2e', '#7e9a42', '#46682a', '#9aa85a'], hedge: ['#2f5a26', '#3f6f2e', '#24461e', '#4f7f36'] }[kind];
     const leaf = (px, py, len, wid, ang, col) => {
       x.save(); x.translate(px, py); x.rotate(ang);
       const g = x.createLinearGradient(0, -wid, 0, wid); g.addColorStop(0, col); g.addColorStop(0.5, shade(col, 1.15)); g.addColorStop(1, shade(col, 0.8));
@@ -188,6 +188,7 @@ export function leafTexture(kind = 'round') {
       x.restore();
     };
     const lobed = (px, py, s, ang, col) => { x.save(); x.translate(px, py); x.rotate(ang); x.fillStyle = col; x.beginPath(); for (let k = 0; k <= 5; k++) { const a = -Math.PI / 2 + (k - 2.5) * 0.55; x.moveTo(0, 0); x.quadraticCurveTo(Math.cos(a - 0.3) * s * 0.7, Math.sin(a - 0.3) * s * 0.7, Math.cos(a) * s, Math.sin(a) * s); x.quadraticCurveTo(Math.cos(a + 0.3) * s * 0.7, Math.sin(a + 0.3) * s * 0.7, 0, 0); } x.fill(); x.restore(); };
+    if (bg) { x.fillStyle = bg; x.fillRect(0, 0, S, S); }
     if (kind === 'grass') {
       for (let i = 0; i < 160; i++) { const px = 20 + r() * (S - 40), hgt = S * (0.45 + r() * 0.5), bend = (r() - 0.5) * 80; x.strokeStyle = cols[i % 4]; x.lineWidth = 3 + r() * 4; x.beginPath(); x.moveTo(px, S); x.quadraticCurveTo(px + bend * 0.3, S - hgt * 0.6, px + bend, S - hgt); x.stroke(); }
     } else if (kind === 'palm') {
@@ -207,7 +208,7 @@ export function leafTexture(kind = 'round') {
     }
     // dapple
     const img = x.getImageData(0, 0, S, S); for (let i = 0; i < S * S; i++) { if (!img.data[i * 4 + 3]) continue; const v = 0.85 + nz.fbm((i % S) / S, Math.floor(i / S) / S, 8, 3) * 0.3; img.data[i * 4] *= v; img.data[i * 4 + 1] *= v; img.data[i * 4 + 2] *= v; } x.putImageData(img, 0, 0);
-    const t = tex(c, true, 'Leaves ' + kind, false);
+    const t = tex(c, true, 'Leaves ' + kind, !!bg);
     return { map: t };
   });
 }

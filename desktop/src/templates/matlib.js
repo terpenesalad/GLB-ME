@@ -44,8 +44,8 @@ export const FINISH = {
   porcelain: { label: 'Porcelain', color: 0xf4f4f1, roughness: 0.08, metalness: 0, clearcoat: 0.6 },
   light: { label: 'Light', color: 0xfff1d6, roughness: 0.5, metalness: 0, emissive: 0xffe2b0, emissiveIntensity: 3 },
   eye: { label: 'Eye', color: 0x0d0b0a, roughness: 0.05, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.02 },
-  skin: { label: 'Skin', color: 0xffffff, roughness: 0.6, metalness: 0, sheen: 0.3, sheenRoughness: 0.8 },
-  fur: { label: 'Fur', color: 0xffffff, roughness: 0.85, metalness: 0, sheen: 0.6, sheenRoughness: 0.6 },
+  skin: { label: 'Skin', color: 0xffffff, roughness: 0.6, metalness: 0, sheen: 0.2, sheenRoughness: 0.8, sheenColor: 0x5a4a48 },
+  fur: { label: 'Fur', color: 0xffffff, roughness: 0.85, metalness: 0, sheen: 0.35, sheenRoughness: 0.6, sheenColor: 0x4a4a4a },
   leaf: { label: 'Leaves', color: 0xffffff, roughness: 0.65, metalness: 0, alphaTest: 0.5, side: THREE.DoubleSide },
   water: { label: 'Water', color: 0x2b5a66, roughness: 0.02, metalness: 0, opacity: 0.75 },
 };
@@ -70,7 +70,7 @@ export function createMaterial(id, { color = null, name = null, ...over } = {}) 
     m.roughness = fin.roughness; m.metalness = fin.metalness;
     if (fin.opacity != null && fin.opacity < 1) { m.transparent = true; m.opacity = fin.opacity; }
     for (const k of ['clearcoat', 'clearcoatRoughness', 'sheen', 'sheenRoughness', 'specularIntensity', 'alphaTest', 'side', 'emissiveIntensity']) if (fin[k] != null) m[k] = fin[k];
-    if (fin.sheen) m.sheenColor.set(color ?? fin.color);
+    if (fin.sheen) m.sheenColor.set(fin.sheenColor ?? color ?? fin.color);
     if (fin.emissive != null) m.emissive.set(fin.emissive);
   }
   for (const [k, v] of Object.entries(over)) {

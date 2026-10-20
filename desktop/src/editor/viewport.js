@@ -903,7 +903,7 @@ export class Viewport {
     const rp = new RenderPass(this.scene, camera);
     const ao = new GTAOPass(this.scene, camera, w, h);
     const hidden = this.aoHidden(), base = ao.overrideVisibility.bind(ao), restore = ao.restoreVisibility.bind(ao);
-    ao.overrideVisibility = () => { base(); for (const o of hidden) { ao._visibilityCache.set(o, o.visible); o.visible = false; } };
+    ao.overrideVisibility = () => { base(); for (const o of hidden) { ao._visibilityCache.set(o, o.visible); o.visible = false; } this.scene.traverse((o) => { const m = o.material; if (o.isMesh && m && !Array.isArray(m) && (m.alphaTest > 0 || m.transparent)) o.visible = false; }); };
     ao.restoreVisibility = () => { restore(); };
     ao.blendIntensity = 1;
     ao.updateGtaoMaterial({ radius: this.aoRadius || 0.25, distanceExponent: 1, thickness: 1, scale: 1, samples: 16 });

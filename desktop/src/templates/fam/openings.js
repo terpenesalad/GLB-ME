@@ -9,8 +9,8 @@ const H = A.HERITAGE;
 const findAll = (k, re) => k.objects.filter((o) => o.ed.kind === 'group' && re.test(o.name));
 const swing = (k, re, deg = 95) => k.openClose(findAll(k, re), (o) => { const right = /Right/.test(o.name) || o.userData.right; o.rotateY((right ? -1 : 1) * deg * Math.PI / 180); });
 
-function bayWindow(k) {
-  const g = k.root, w = 1.0, h = 2.0, side = 0.8, depth = side * Math.SQRT1_2, sill = 0.75, t = 0.23;
+export function bayWindow(k, o = {}) {
+  const g = k.group(o.name || 'Bay window', o.parent ?? k.root, { at: o.at, rot: o.rot }), w = 1.0, h = 2.0, side = 0.8, depth = side * Math.SQRT1_2, sill = 0.75, t = 0.23;
   const cx = w / 2 + depth; // half width of the bay
   // brick base and piers (plan: centre face at z = depth, angled sides back to the wall at z = 0)
   const plan = [[-cx, 0], [-w / 2, depth], [w / 2, depth], [cx, 0]];
@@ -47,18 +47,18 @@ function porthole(k, { r = 0.35 } = {}) {
   return k;
 }
 
-function shopfront(k) {
-  const g = k.root, W = 3.6, H2 = 3.2, stall = 0.55, transom = 2.6;
-  const timber = k.mat('paint_timber', { color: 0x1f3b2c, name: 'Shopfront timber' });
+export function shopfront(k, o = {}) {
+  const g = k.group(o.name || 'Shopfront', o.parent ?? k.root, { at: o.at, rot: o.rot }), W = o.W ?? 3.6, H2 = 3.2, stall = 0.55, transom = 2.6;
+  const tc = o.color ?? 0x1f3b2c, timber = k.mat('paint_timber', { color: tc, name: 'Shopfront timber' });
   const geos = [G.span([-W / 2, 0, -0.15], [W / 2, stall, 0.02], { bevel: 0.01 }), G.span([-W / 2, stall, -0.12], [W / 2, stall + 0.08, 0.05], { bevel: 0.006 })];
   for (const x of [-W / 2, -0.55, 0.55, W / 2 - 0.08]) geos.push(G.span([x, stall, -0.1], [x + 0.08, H2, 0.0]));
   geos.push(G.span([-W / 2, transom, -0.1], [W / 2, transom + 0.08, 0.01]), G.span([-W / 2, H2 - 0.08, -0.12], [W / 2, H2, 0.02]));
   for (const s of [-1, 1]) for (let i = 0; i < 3; i++) geos.push(G.box(0.38, 0.12, 0.03, { bevel: 0.01, at: [s * (W / 2 - 0.62) + (i - 1) * 0.4, stall * 0.5, 0.025] }));
   k.part('Frame & stallboard', geos, timber, { parent: g });
   k.part('Shop glass', [G.quad(W / 2 - 0.6, transom - stall - 0.08, { at: [-(W / 4 + 0.27), (transom + stall + 0.08) / 2, -0.05] }), G.quad(W / 2 - 0.6, transom - stall - 0.08, { at: [W / 4 + 0.27, (transom + stall + 0.08) / 2, -0.05] }), G.quad(W - 0.16, H2 - transom - 0.16, { at: [0, (H2 + transom) / 2, -0.05] })], 'glass', { parent: g, shadow: false });
-  A.doorway(k, g, { name: 'Shop door', at: [0, 0, 0], w: 1.1, h: transom, fan: 0, style: 'glazed', color: 0x1f3b2c, frame: 0x1f3b2c, inset: 0.0 });
-  A.signPart(k, g, 'Sign', ['GENERAL STORE'], { bg: '#1f3b2c', fg: '#e8c76a', font: 'Georgia, serif', weight: 700, pad: 30, border: 8, borderColor: '#e8c76a', w: 1024, h: 180 }, { w: W - 0.2, at: [0, H2 + 0.35, 0.03] });
-  k.part('Sign board', [G.box(W, 0.72, 0.05, { bevel: 0.01, at: [0, H2 + 0.36, 0.0] })], timber, { parent: g });
+  A.doorway(k, g, { name: 'Shop door', at: [0, 0, 0], w: 1.1, h: transom, fan: 0, style: 'glazed', color: tc, frame: tc, inset: 0.0 });
+  if (o.sign !== false) A.signPart(k, g, 'Sign', [o.sign || 'GENERAL STORE'], { bg: '#' + tc.toString(16).padStart(6, '0'), fg: '#e8c76a', font: 'Georgia, serif', weight: 700, pad: 30, border: 8, borderColor: '#e8c76a', w: 1024, h: 180 }, { w: W - 0.2, at: [0, H2 + 0.35, 0.03] });
+  if (o.sign !== false) k.part('Sign board', [G.box(W, 0.72, 0.05, { bevel: 0.01, at: [0, H2 + 0.36, 0.0] })], timber, { parent: g });
   return k;
 }
 

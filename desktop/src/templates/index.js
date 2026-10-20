@@ -3,6 +3,7 @@
 // Each entry: { id, name, category, desc, tags, env?, animated?, build(kit) }.
 import { Kit } from './kit.js';
 import melbourne from './fam/melbourne.js';
+import melbourne2 from './fam/melbourne2.js';
 import trams from './fam/trams.js';
 import streets from './fam/streets.js';
 import rooms from './fam/rooms.js';
@@ -14,7 +15,7 @@ import nature from './fam/nature.js';
 import props from './fam/props.js';
 
 export const CATEGORY_ORDER = ['Melbourne', 'Trams & roads', 'Buildings', 'Rooms', 'Building kit', 'Windows & doors', 'Furniture', 'Street props', 'Animals', 'Nature'];
-export const CATALOG = [...melbourne, ...trams, ...streets, ...buildings, ...rooms, ...openings, ...furniture, ...props, ...animals, ...nature];
+export const CATALOG = [...melbourne, ...melbourne2, ...trams, ...streets, ...buildings, ...rooms, ...openings, ...furniture, ...props, ...animals, ...nature];
 const byId = new Map(CATALOG.map((t) => [t.id, t]));
 export const findTemplate = (id) => byId.get(id);
 

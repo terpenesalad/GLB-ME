@@ -46,15 +46,15 @@ function branchingTree(k, { seed = 1, height = 9, trunkR = 0.28, lean = 0.1, lev
     for (let i = 1; i <= 3; i++) { d.add(new THREE.Vector3((rnd() - 0.5) * 0.35, (rnd() - 0.5) * 0.15 - droop * i * 0.08, (rnd() - 0.5) * 0.35)).normalize(); p = p.clone().addScaledVector(d, len / 3); pts.push(p.toArray()); }
     const rEnd = r * (lvl === 0 ? 0.55 : 0.45);
     tubes.push(barkTube(pts, r, rEnd, lvl === 0 ? 14 : lvl === 1 ? 9 : 6));
-    if (lvl >= levels) { cards.push(...cluster(pts.at(-1), leafSize * (0.8 + rnd() * 0.5), rnd, 3)); return; }
-    const kids = lvl === 0 ? 4 + Math.floor(rnd() * 2) : 2 + Math.floor(rnd() * 2);
+    if (lvl >= levels) { cards.push(...cluster(pts.at(-1), leafSize * (0.9 + rnd() * 0.5), rnd, 4)); const m = pts[2]; cards.push(...cluster(m, leafSize * 0.8, rnd, 2)); return; }
+    const kids = lvl === 0 ? 5 + Math.floor(rnd() * 2) : 3 + Math.floor(rnd() * 2);
     for (let i = 0; i < kids; i++) {
       const t = lvl === 0 ? crown + (1 - crown) * (i / kids) : 0.55 + rnd() * 0.45;
       const at = new THREE.CatmullRomCurve3(pts.map(V)).getPointAt(Math.min(1, t)).toArray();
       const a = (i / kids) * Math.PI * 2 + rnd() * 0.8, up = 0.55 + rnd() * 0.5;
       const nd = [Math.cos(a) * spread, up, Math.sin(a) * spread];
       grow(at, nd, len * (0.55 + rnd() * 0.2), r * (lvl === 0 ? 0.45 : 0.55), lvl + 1);
-      if (lvl >= clusterAt - 1) cards.push(...cluster(at, leafSize * 0.8, rnd, 2));
+      if (lvl >= clusterAt - 1) cards.push(...cluster(at, leafSize * 0.9, rnd, 3));
     }
   };
   grow([0, 0, 0], [lean, 1, lean * 0.5], height * 0.55, trunkR, 0);
@@ -102,18 +102,39 @@ function treeFern(k) {
   k.part('Fronds', [canopyGeo(fronds, [0, h + 0.4, 0], 0.5)], k.texMat('Leaves (fern)', leafTexture('palm'), { finish: 'leaf', color: 0x9fc27a, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.6 }), { parent: g, uv: 'keep' });
   return k;
 }
-function conifer(k, { seed = 3, h = 7 } = {}) {
-  const prims = [P.cone([0, 0, 0], [0, h * 0.3, 0], 0.18, 0.14, hex(0x5a4030), { k: 0.05 })];
-  for (let i = 0; i < 6; i++) { const y = h * (0.2 + i * 0.13), r = (1 - i / 6) * h * 0.22 + 0.2; prims.push(P.cone([0, y, 0], [0, y + h * 0.22, 0], r, 0.05, hex(i % 2 ? 0x2c4a2a : 0x335a30), { k: 0.25 })); }
-  const geo = sdfMesh(prims, { res: 90, noise: { amp: 0.08, freq: 3.5, oct: 4 }, seed, colorFn: (p, c) => p[1] < h * 0.18 ? c : [c[0] * (0.75 + fbm3(p[0] * 4, p[1] * 4, p[2] * 4) * 0.5), c[1] * (0.75 + fbm3(p[0] * 4, p[1] * 4, p[2] * 4) * 0.5), c[2]] });
-  k.part('Conifer', [geo], k.mat('fur', { color: 0xffffff, name: 'Foliage' }), { parent: k.root, uv: 'none' });
+function conifer(k, { seed = 3, h = 8 } = {}) {
+  const rnd = rng(seed), g = k.group('Conifer', k.root);
+  k.part('Trunk', [barkTube([[0, 0, 0], [0.02, h * 0.5, 0.01], [0, h, 0]], 0.22, 0.04, 12)], k.texMat('Bark (rough)', barkTexture('rough'), { finish: 'matte', roughness: 0.95 }), { parent: g, uv: 'keep' });
+  const cards = [];
+  const whorls = 16;
+  for (let w = 0; w < whorls; w++) {
+    const t = w / whorls, y = h * (0.15 + t * 0.85), R = (1 - t) * h * 0.3 + 0.25, n = Math.max(4, Math.round(9 * (1 - t) + 3));
+    for (let i = 0; i < n; i++) {
+      const a = i / n * Math.PI * 2 + rnd() * 0.5 + w * 0.7, droop = 22 + rnd() * 12;
+      const L = R * (0.8 + rnd() * 0.3), c = [Math.cos(a) * L / 2, y - Math.sin(droop * Math.PI / 180) * L / 2, Math.sin(a) * L / 2];
+      cards.push(G.quad(L * 1.3, L * 0.8, { at: c, rot: [-90 + droop, -a * 180 / Math.PI, 0] }));
+      cards.push(G.quad(L * 1.3, L * 0.6, { at: c, rot: [0, -a * 180 / Math.PI, droop] }));
+    }
+  }
+  cards.push(...cluster([0, h, 0], 0.8, rnd, 3));
+  k.part('Needles', [canopyGeo(cards, [0, h * 0.5, 0], 1.6)], k.texMat('Needles', leafTexture('hedge'), { finish: 'leaf', color: 0xe0ead2, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.75 }), { parent: g, uv: 'keep' });
   return k;
 }
 function shrub(k, { kind = 'round', box = false, seed = 4 } = {}) {
-  const prims = box ? [P.box([0, 0.6, 0], [2.4, 1.2, 0.8], 0.15, hex(0x2f5426), { k: 0.1 })] : [P.ell([0, 0.55, 0], [0.7, 0.55, 0.65], hex(0x3b6a2c), { k: 0.2 }), P.ell([0.35, 0.45, 0.2], [0.4, 0.4, 0.4], hex(0x3f702e), { k: 0.25 }), P.ell([-0.3, 0.42, -0.25], [0.42, 0.38, 0.4], hex(0x35622a), { k: 0.25 })];
-  const geo = sdfMesh(prims, { res: box ? 110 : 80, noise: { amp: box ? 0.025 : 0.06, freq: box ? 12 : 6, oct: 4 }, seed, colorFn: (p, c, n) => { const v = 0.7 + fbm3(p[0] * 9, p[1] * 9, p[2] * 9) * 0.6; const top = n[1] > 0.4 ? 1.1 : 1; return [c[0] * v * top, c[1] * v * top, c[2] * v]; } });
-  k.part(box ? 'Hedge' : 'Shrub', [geo], k.mat('fur', { color: 0xffffff, name: 'Foliage', roughness: 0.9, sheen: 0.4 }), { parent: k.root, uv: 'none' });
-  if (!box) { const rnd = rng(seed), cards = []; for (let i = 0; i < 26; i++) { const a = rnd() * Math.PI * 2, e = rnd() * 1.2; cards.push(...cluster([Math.cos(a) * 0.55 * Math.cos(e * 0.6), 0.5 + Math.sin(e) * 0.45, Math.sin(a) * 0.5 * Math.cos(e * 0.6)], 0.5, rnd, 1)); } k.part('Leaf cards', [canopyGeo(cards, [0, 0.5, 0])], k.texMat('Leaves (' + kind + ')', leafTexture(kind), { finish: 'leaf', alphaTest: 0.45, side: THREE.DoubleSide }), { parent: k.root, uv: 'keep' }); }
+  const rnd = rng(seed), root = k.root, lm = k.texMat('Leaves (' + (box ? 'hedge' : kind) + ')', leafTexture(box ? 'hedge' : kind), { finish: 'leaf', alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.75 });
+  if (box) {
+    const W = 2.4, Hh = 1.2, D = 0.8;
+    k.part('Hedge body', [G.box(W, Hh, D, { bevel: 0.12, seg: 3, at: [0, Hh / 2, 0] })], k.texMat('Clipped hedge', { map: leafTexture('hedge', { bg: '#1c3517' }).map }, { finish: 'matte', roughness: 0.9 }), { parent: root, uv: 'world', tile: [0.5, 0.5] });
+    const cards = [];
+    for (let i = 0; i < 140; i++) { const f = Math.floor(rnd() * 5), u = rnd() - 0.5, v = rnd(); let c; if (f === 0) c = [u * W, Hh + 0.02, (rnd() - 0.5) * D]; else if (f < 3) c = [u * W, v * Hh * 0.95 + 0.05, (f === 1 ? 1 : -1) * (D / 2 + 0.02)]; else c = [(f === 3 ? 1 : -1) * (W / 2 + 0.02), v * Hh * 0.95 + 0.05, u * D]; cards.push(...cluster(c, 0.32, rnd, 1)); }
+    k.part('Leaf fringe', [canopyGeo(cards, [0, Hh * 0.4, 0], 0.6)], lm, { parent: root, uv: 'keep' });
+    return k;
+  }
+  const core = sdfMesh([P.ell([0, 0.55, 0], [0.62, 0.5, 0.58], hex(0x1f3a18), { k: 0.2 }), P.ell([0.3, 0.45, 0.2], [0.38, 0.36, 0.36], hex(0x22401a), { k: 0.25 }), P.ell([-0.28, 0.42, -0.22], [0.38, 0.34, 0.36], hex(0x1d3616), { k: 0.25 })], { res: 48, noise: { amp: 0.06, freq: 5 }, seed });
+  k.part('Core', [core], k.mat('fur', { color: 0xffffff, name: 'Foliage core', roughness: 0.95 }), { parent: root, uv: 'none' });
+  const cards = [];
+  for (let i = 0; i < 90; i++) { const a = rnd() * Math.PI * 2, e = Math.asin(rnd() * 1.6 - 0.6), r = 0.62 + rnd() * 0.1; cards.push(...cluster([Math.cos(a) * Math.cos(e) * r, 0.5 + Math.sin(e) * 0.5, Math.sin(a) * Math.cos(e) * r * 0.95], 0.45, rnd, 1)); }
+  k.part('Leaves', [canopyGeo(cards, [0, 0.45, 0])], lm, { parent: root, uv: 'keep' });
   return k;
 }
 function grass(k) {
@@ -145,7 +166,7 @@ function rocks(k, { seed = 2, big = false } = {}) {
   const rnd = rng(seed), prims = [];
   const n = big ? 1 : 4;
   for (let i = 0; i < n; i++) { const s = big ? 1.4 : 0.25 + rnd() * 0.35, x = big ? 0 : (rnd() - 0.5) * 1.6, z = big ? 0 : (rnd() - 0.5) * 1.2; prims.push(P.ell([x, s * 0.35, z], [s, s * 0.7, s * 0.85], hex(0x6b6862), { rot: [rnd() * 20, rnd() * 180, rnd() * 20], k: 0.05 })); }
-  const geo = sdfMesh(prims, { res: big ? 110 : 90, noise: { amp: big ? 0.18 : 0.05, freq: big ? 1.6 : 5, oct: 5 }, seed, colorFn: (p, c, nn) => { const v = 0.75 + fbm3(p[0] * 6, p[1] * 6, p[2] * 6) * 0.45; const moss = nn[1] > 0.6 ? 0.35 : 0; return [c[0] * v * (1 - moss) + 0.32 * moss, c[1] * v * (1 - moss) + 0.42 * moss, c[2] * v * (1 - moss) + 0.2 * moss]; } });
+  const geo = sdfMesh(prims, { res: big ? 120 : 100, noise: { amp: big ? 0.3 : 0.07, freq: big ? 2.2 : 7, oct: 5 }, seed, colorFn: (p, c, nn) => { const v = 0.75 + fbm3(p[0] * 6, p[1] * 6, p[2] * 6) * 0.45; const moss = Math.max(0, Math.min(1, (nn[1] - 0.55) / 0.3)) * 0.4 * fbm3(p[0] * 3, p[1] * 3, p[2] * 3) * 2; return [c[0] * v * (1 - moss) + 0.32 * moss, c[1] * v * (1 - moss) + 0.42 * moss, c[2] * v * (1 - moss) + 0.2 * moss]; } });
   geo.translate(0, -0.06, 0);
   k.part(big ? 'Boulder' : 'Rocks', [geo], k.mat('matte', { color: 0xffffff, name: 'Stone', roughness: 0.92 }), { parent: k.root, uv: 'none', collision: 'convcol' });
   return k;
@@ -159,9 +180,9 @@ function log(k) {
 }
 
 export default [
-  { id: 'n_red_gum', name: 'River Red Gum', category: 'Nature', env: 'PARK', tags: ['tree', 'eucalyptus', 'gum tree', 'australian', 'native'], desc: 'Sprawling eucalypt with smooth, patchy bark and drooping grey-green leaves.', build: (k) => branchingTree(k, { name: 'River red gum', seed: 4, height: 12, trunkR: 0.45, lean: 0.18, spread: 1.4, leaf: 'gum', bark: 'gum', leafSize: 2.0, crown: 0.4, droop: 0.4 }) },
-  { id: 'n_plane', name: 'London Plane Tree', category: 'Nature', env: 'PARK', tags: ['tree', 'plane tree', 'street tree', 'deciduous', 'melbourne'], desc: 'The classic Melbourne street tree: mottled trunk and a broad, leafy crown.', build: (k) => branchingTree(k, { name: 'London plane', seed: 7, height: 11, trunkR: 0.32, lean: 0.03, spread: 0.85, leaf: 'plane', bark: 'gum', leafSize: 1.7, crown: 0.45 }) },
-  { id: 'n_oak', name: 'Oak Tree', category: 'Nature', env: 'PARK', tags: ['tree', 'oak', 'deciduous', 'park'], desc: 'Broad park tree with rough bark and dense foliage.', build: (k) => branchingTree(k, { name: 'Oak', seed: 12, height: 9, trunkR: 0.4, lean: 0.05, spread: 1.3, leaf: 'round', bark: 'rough', leafSize: 1.6, crown: 0.35 }) },
+  { id: 'n_red_gum', name: 'River Red Gum', category: 'Nature', env: 'PARK', tags: ['tree', 'eucalyptus', 'gum tree', 'australian', 'native'], desc: 'Sprawling eucalypt with smooth, patchy bark and drooping grey-green leaves.', build: (k) => branchingTree(k, { name: 'River red gum', seed: 4, height: 15, trunkR: 0.5, lean: 0.15, spread: 1.1, leaf: 'gum', bark: 'gum', leafSize: 2.8, crown: 0.5, droop: 0.3 }) },
+  { id: 'n_plane', name: 'London Plane Tree', category: 'Nature', env: 'PARK', tags: ['tree', 'plane tree', 'street tree', 'deciduous', 'melbourne'], desc: 'The classic Melbourne street tree: mottled trunk and a broad, leafy crown.', build: (k) => branchingTree(k, { name: 'London plane', seed: 7, height: 11, trunkR: 0.32, lean: 0.03, spread: 0.85, leaf: 'plane', bark: 'rough', leafSize: 2.3, crown: 0.45 }) },
+  { id: 'n_oak', name: 'Oak Tree', category: 'Nature', env: 'PARK', tags: ['tree', 'oak', 'deciduous', 'park'], desc: 'Broad park tree with rough bark and dense foliage.', build: (k) => branchingTree(k, { name: 'Oak', seed: 12, height: 9, trunkR: 0.4, lean: 0.05, spread: 1.3, leaf: 'round', bark: 'rough', leafSize: 2.2, crown: 0.35 }) },
   { id: 'n_palm', name: 'Canary Island Palm', category: 'Nature', env: 'PARK', tags: ['palm', 'tree', 'st kilda', 'tropical'], desc: 'Stout date palm with a full crown of arching fronds (St Kilda Road style).', build: (k) => palm(k) },
   { id: 'n_tree_fern', name: 'Tree Fern', category: 'Nature', env: 'FOREST', tags: ['fern', 'tree fern', 'australian', 'native', 'rainforest'], desc: 'Soft tree fern with a fibrous trunk and arching fronds.', build: (k) => treeFern(k) },
   { id: 'n_conifer', name: 'Conifer', category: 'Nature', env: 'FOREST', tags: ['pine', 'conifer', 'tree', 'evergreen'], desc: 'Layered evergreen conifer.', build: (k) => conifer(k) },
