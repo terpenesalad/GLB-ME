@@ -70,10 +70,15 @@ const web = {
     async import(name, data) { const id = 'file:' + name; await idb('fonts', 'readwrite', (s) => s.put({ name: name.replace(/\.(ttf|otf|woff)$/i, ''), data }, id)); return id; },
     remove: (id) => idb('fonts', 'readwrite', (s) => s.delete(id)),
   },
-  app: { pending: async () => [], version: async () => '1.1.0', openExternal: async (u) => window.open(u, '_blank'), onOpenFile() {} },
+  app: { pending: async () => [], version: async () => '1.2.0', openExternal: async (u) => window.open(u, '_blank'), onOpenFile() {} },
 };
 
+web.pipeline = {
+  pickDir: async () => null, inspect: async () => ({ exists: false }), findTool: async () => null, pickTool: async () => null,
+  write: async (dir, sub, files) => { for (const [n, d] of files) await web.files.save(n, d); return files.map(([n]) => n); },
+  writeTemp: async (n) => n, launch: async () => { throw new Error('desktop only'); },
+};
 export const platform = electron || web;
-export const MODEL_FILTERS = [{ name: '3D models', extensions: ['glb', 'gltf', 'obj', 'stl', 'ply', 'fbx'] }];
+export const MODEL_FILTERS = [{ name: '3D models', extensions: ['glb', 'gltf', 'obj', 'stl', 'ply', 'fbx', 'dae', '3mf'] }];
 export const IMAGE_FILTERS = [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }];
 export const FONT_FILTERS = [{ name: 'Fonts', extensions: ['ttf', 'otf', 'woff'] }];

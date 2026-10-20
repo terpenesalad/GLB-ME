@@ -1,6 +1,7 @@
 // Tiny DOM toolkit: element builder, icons, tooltips, toasts, menus, modals and form controls
 // (all keyboard accessible, with ARIA roles).
 import ICONS from './icons.gen.js';
+import { openColorPopover, colorPopoverOpen, closeColorPopover } from './color.js';
 
 export function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
@@ -40,7 +41,8 @@ export function tip(el, text) {
   if (!text) return;
   const [label, key] = Array.isArray(text) ? text : [text, null];
   if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', label + (key ? ` (${key})` : ''));
-  el.addEventListener('pointerenter', () => {
+  if (key && !el.getAttribute('aria-keyshortcuts')) el.setAttribute('aria-keyshortcuts', String(key).replace(/Ctrl/g, 'Control').replace(/\s+/g, ''));
+  const show = (delay) => {
     clearTimeout(tipTimer);
     tipTimer = setTimeout(() => {
       hideTip();
@@ -52,10 +54,14 @@ export function tip(el, text) {
       if (y + t.height > innerHeight - 4) y = r.top - t.height - 8;
       x = Math.max(6, Math.min(innerWidth - t.width - 6, x));
       tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px';
-    }, 450);
-  });
+    }, delay);
+  };
+  el.addEventListener('pointerenter', () => show(450));
   el.addEventListener('pointerleave', hideTip);
   el.addEventListener('pointerdown', hideTip);
+  // keyboard users get the tooltip (with its shortcut) when they tab onto the control
+  el.addEventListener('focus', () => { try { if (el.matches(':focus-visible')) show(250); } catch { /* old engines */ } });
+  el.addEventListener('blur', hideTip);
 }
 export function hideTip() { clearTimeout(tipTimer); if (tipEl) { tipEl.remove(); tipEl = null; } }
 
@@ -71,7 +77,7 @@ export function toast(text, ms = 2200) {
 
 // ---------------------------------------------------------------------------------- buttons
 export function btn(label, onClick, cls = '', ic = null, tipText = null) {
-  return h('button', { class: 'btn ' + cls, onclick: onClick, tip: tipText }, ic ? icon(ic) : null, label);
+  return h('button', { class: 'btn ' + cls, onclick: onClick, tip: tipText }, ic ? icon(ic) : null, label ? h('span', { class: 'bl' }, label) : null);
 }
 export function ibtn(ic, tipText, onClick, cls = '') {
   return h('button', { class: 'ibtn ' + cls, onclick: onClick, tip: tipText }, icon(ic));
@@ -82,39 +88,84 @@ export function tool(ic, label, onClick, active = false, tipText = null) {
 
 // ---------------------------------------------------------------------------------- menus
 let openMenu = null;
-export function closeMenu() { if (openMenu) { openMenu.remove(); openMenu = null; } }
-/** items: {label, icon, key, onClick, danger, disabled} | 'sep' | {header} */
-export function menu(items, x, y, anchor = null) {
+export function closeMenu() { if (openMenu) { const m = openMenu; openMenu = null; const hadFocus = m.contains(document.activeElement); m.remove(); m._onClose?.(); if (hadFocus && m._prev?.isConnected && !modalStack.length) m._prev.focus({ preventScroll: true }); } }
+export const menuOpen = () => !!openMenu;
+/**
+ * Popup menu. items: {label, icon, key, onClick, danger, disabled, checked, items (submenu)} | 'sep' | {header}
+ * opts.onNav(dir) lets a menu bar move to the neighbouring menu with ←/→; opts.onClose runs when it closes.
+ */
+export function menu(items, x, y, anchor = null, opts = {}) {
   closeMenu();
-  const bd = h('div', { class: 'backdrop clear', onpointerdown: (e) => { if (e.target === bd) closeMenu(); }, oncontextmenu: (e) => { e.preventDefault(); closeMenu(); } });
-  const m = h('div', { class: 'menu', role: 'menu' });
-  for (const it of items) {
-    if (!it) continue;
-    if (it === 'sep') { m.appendChild(h('div', { class: 'sep', role: 'separator' })); continue; }
-    if (it.header) { m.appendChild(h('div', { class: 'hdr' }, it.header)); continue; }
-    m.appendChild(h('div', {
-      class: 'item' + (it.danger ? ' danger' : ''), role: 'menuitem', tabindex: '-1', 'aria-disabled': it.disabled ? 'true' : null,
-      style: it.disabled ? { opacity: 0.4, pointerEvents: 'none' } : null,
-      onclick: () => { closeMenu(); it.onClick?.(); },
-      onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); closeMenu(); it.onClick?.(); } },
-    }, it.icon ? icon(it.icon) : h('span', { class: 'icon' }), it.label, it.key ? h('span', { class: 'k' }, it.key) : null));
-  }
-  bd.appendChild(m);
+  const bd = h('div', { class: 'backdrop clear', onpointerdown: (e) => { if (e.target === bd) { closeMenu(); opts.onOutside?.(e); } }, oncontextmenu: (e) => { e.preventDefault(); closeMenu(); } });
+  bd._onClose = opts.onClose; bd._prev = anchor || document.activeElement;
   document.body.appendChild(bd);
   openMenu = bd;
+  const levels = [];
+  const build = (list, level, px, py, parentItem) => {
+    while (levels.length > level) levels.pop().remove();
+    const m = h('div', { class: 'menu', role: 'menu', 'aria-label': opts.label || null });
+    levels.push(m);
+    const rows = [];
+    for (const it of list) {
+      if (!it) continue;
+      if (it === 'sep') { m.appendChild(h('div', { class: 'sep', role: 'separator' })); continue; }
+      if (it.header) { m.appendChild(h('div', { class: 'hdr', role: 'presentation' }, it.header)); continue; }
+      const sub = Array.isArray(it.items) && it.items.length;
+      const role = it.checked != null ? 'menuitemcheckbox' : 'menuitem';
+      const row = h('div', {
+        class: 'item' + (it.danger ? ' danger' : '') + (sub ? ' has-sub' : ''), role, tabindex: '-1', 'aria-disabled': it.disabled ? 'true' : null,
+        'aria-checked': it.checked != null ? String(!!it.checked) : null, 'aria-haspopup': sub ? 'menu' : null, 'aria-keyshortcuts': it.key ? String(it.key).replace(/Ctrl/g, 'Control').replace(/\s+/g, '') : null,
+        style: it.disabled ? { opacity: 0.4 } : null,
+        onclick: () => { if (it.disabled) return; if (sub) { openSub(); return; } closeMenu(); it.onClick?.(); },
+        onpointerenter: () => { row.focus({ preventScroll: true }); if (sub) openSub(); else while (levels.length > level + 1) levels.pop().remove(); },
+        onkeydown: (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); if (it.disabled) return; if (sub) { openSub(true); return; } closeMenu(); it.onClick?.(); }
+          if (e.key === 'ArrowRight' && sub) { e.preventDefault(); e.stopPropagation(); openSub(true); }
+        },
+      }, it.checked != null ? icon(it.checked ? 'check' : 'circle-dashed', it.checked ? '' : 'ghosticon') : it.icon ? icon(it.icon) : h('span', { class: 'icon' }), h('span', { class: 'lbl' }, it.label), it.key ? h('span', { class: 'k' }, it.key) : null, sub ? icon('chevron-right', 'sm') : null);
+      const openSub = (focus = false) => {
+        const r = row.getBoundingClientRect();
+        const child = build(it.items, level + 1, r.right - 4, r.top - 5, row);
+        if (focus) child.querySelector('.item:not([aria-disabled=true])')?.focus();
+      };
+      rows.push(row); m.appendChild(row);
+    }
+    bd.appendChild(m);
+    const r = m.getBoundingClientRect();
+    if (level > 0 && px + r.width > innerWidth - 6) px = parentItem.getBoundingClientRect().left - r.width + 4;
+    m.style.left = Math.max(6, Math.min(innerWidth - r.width - 6, px)) + 'px';
+    m.style.top = Math.max(6, (py + r.height > innerHeight - 6 ? (level ? innerHeight - r.height - 6 : py - r.height - (anchor ? anchor.getBoundingClientRect().height + 12 : 0)) : py)) + 'px';
+    m.addEventListener('keydown', (e) => {
+      const f = rows.filter((x) => x.getAttribute('aria-disabled') !== 'true');
+      const i = f.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); f[(i + 1) % f.length]?.focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); f[(i - 1 + f.length) % f.length]?.focus(); }
+      else if (e.key === 'Home') { e.preventDefault(); f[0]?.focus(); }
+      else if (e.key === 'End') { e.preventDefault(); f[f.length - 1]?.focus(); }
+      else if (e.key === 'ArrowLeft' && level > 0) { e.preventDefault(); e.stopPropagation(); levels.pop().remove(); parentItem.focus(); }
+      else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && level === 0 && opts.onNav) { e.preventDefault(); e.stopPropagation(); opts.onNav(e.key === 'ArrowLeft' ? -1 : 1); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (level > 0) { levels.pop().remove(); parentItem.focus(); } else { closeMenu(); anchor?.focus(); } }
+      else if (e.key === 'Tab') { e.preventDefault(); closeMenu(); anchor?.focus(); }
+      else if (e.key.length === 1 && /\S/.test(e.key) && !e.ctrlKey && !e.metaKey) { // type-ahead
+        const ch = e.key.toLowerCase(), start = i + 1;
+        for (let k = 0; k < f.length; k++) { const x = f[(start + k) % f.length]; if (x.querySelector('.lbl')?.textContent.trim().toLowerCase().startsWith(ch)) { x.focus(); break; } }
+      }
+    });
+    return m;
+  };
   if (anchor) { const r = anchor.getBoundingClientRect(); x = r.left; y = r.bottom + 6; }
-  const r = m.getBoundingClientRect();
-  m.style.left = Math.max(6, Math.min(innerWidth - r.width - 6, x)) + 'px';
-  m.style.top = Math.max(6, (y + r.height > innerHeight - 6 ? y - r.height - (anchor ? anchor.getBoundingClientRect().height + 12 : 0) : y)) + 'px';
-  const focusables = [...m.querySelectorAll('.item')];
-  focusables[0]?.focus();
-  m.addEventListener('keydown', (e) => {
-    const i = focusables.indexOf(document.activeElement);
-    if (e.key === 'ArrowDown') { e.preventDefault(); focusables[(i + 1) % focusables.length]?.focus(); }
-    if (e.key === 'ArrowUp') { e.preventDefault(); focusables[(i - 1 + focusables.length) % focusables.length]?.focus(); }
-    if (e.key === 'Escape') { e.stopPropagation(); closeMenu(); anchor?.focus(); }
-  });
+  const first = build(items, 0, x, y, null);
+  if (opts.focus !== false) first.querySelector('.item:not([aria-disabled=true])')?.focus();
   return bd;
+}
+
+// ---------------------------------------------------------------------------------- screen reader
+let liveEl = null;
+/** Speaks a short status message to screen readers (selection, mode, tool changes). */
+export function announce(text) {
+  if (!liveEl) { liveEl = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' }); document.body.appendChild(liveEl); }
+  liveEl.textContent = '';
+  setTimeout(() => { liveEl.textContent = text; }, 30);
 }
 
 // ---------------------------------------------------------------------------------- modals
@@ -148,10 +199,11 @@ export function modal({ title, body, footer, wide = false, onClose, closable = t
   setTimeout(() => (box.querySelector('[autofocus]') || box.querySelector('input, .btn.primary, button'))?.focus(), 30);
   return api;
 }
-export const anyModalOpen = () => modalStack.length > 0 || !!openMenu;
+export const anyModalOpen = () => modalStack.length > 0 || !!openMenu || colorPopoverOpen();
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (openMenu) { e.preventDefault(); closeMenu(); return; }
+  if (colorPopoverOpen()) { e.preventDefault(); e.stopPropagation(); closeColorPopover(); return; }
   const top = modalStack[modalStack.length - 1];
   if (top && top.closable !== false && !top.el.contains(document.activeElement)) { e.preventDefault(); top.close(); }
 }, true);
@@ -227,11 +279,13 @@ export function select(options, value, onChange, ariaLabel = '') {
   const s = h('select', { class: 'field', 'aria-label': ariaLabel, onchange: () => onChange(s.value) }, options.map(([v, l]) => h('option', { value: v, selected: v === value }, l)));
   return s;
 }
-export function colorSwatch(hex, onInput, onCommit, label = 'Color') {
-  const inp = h('input', { type: 'color', value: hex, 'aria-label': label });
-  const sw = h('div', { class: 'swatch', style: { background: hex } }, inp);
-  inp.addEventListener('input', () => { sw.style.background = inp.value; onInput?.(inp.value); });
-  inp.addEventListener('change', () => onCommit?.(inp.value));
+/** Colour button that opens the accessible colour wheel. onInput(hex) live, onCommit(hex) when a change ends. */
+export function colorSwatch(hex, onInput, onCommit, label = 'Colour', opts = {}) {
+  let cur = hex;
+  const sw = h('button', { class: 'swatch picker', style: { background: hex }, 'aria-label': `${label}: ${hex}`, 'aria-haspopup': 'dialog', title: label });
+  const setUi = (x) => { cur = x; sw.style.background = x; sw.setAttribute('aria-label', `${label}: ${x}`); };
+  sw.addEventListener('click', () => openColorPopover(sw, { value: cur, label, onEyedrop: opts.onEyedrop, onInput: (x) => { setUi(x); onInput?.(x); }, onCommit: (x) => { setUi(x); onCommit?.(x); } }));
+  sw.set = setUi;
   return sw;
 }
 /** Three numeric fields with drag-to-scrub labels (X/Y/Z). */

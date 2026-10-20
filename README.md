@@ -8,15 +8,17 @@ Android → <code>GLB-ME-x.y.z.apk</code> · Windows → <code>GLB-ME-Setup-x.y.
 
 ## Desktop version
 
-The PC app (in [`desktop/`](desktop)) has the same toolset as the phone app, laid out for mouse and keyboard:
-layers on the left, inspector on the right, a tool strip on top and a timeline when animating.
+The PC app (in [`desktop/`](desktop)) is a full desktop 3D editor in the spirit of Spline, Shapr3D, Tinkercad and Blender, built to hand models straight to game engines:
 
-- **Projects move freely between phone and PC**: every project is a standard `.glb` with the editing data inside. Use *Save as GLB…* on one device and open or import it on the other.
-- **3D text with your PC's installed fonts**, 14 bundled open-licence fonts (including Michroma, a wide Horizon-style display face) or any `.ttf` / `.otf` / `.woff` you import.
-- Sculpt with a mouse or pen tablet (pressure supported), vertex paint, face selection with part materials, 18 seamless textures, photos, stickers, image planes, lights, keyframe animation with presets.
-- Export **GLB, glTF, USDZ, OBJ + MTL (zip), STL, PLY** with presets (Game ready, Web & AR, iPhone AR, 3D print, Other 3D apps), triangle budget, texture size, origin, units and up axis.
-- Drag & drop models, images and fonts onto the window; `.glb`/`.gltf` files can be opened with GLB&ME from Explorer/Finder.
-- Shortcuts: **1–5** modes · **W/E/R** move/rotate/scale · **F** frame · **Shift+A** add · **T** text · **Ctrl+Z / Ctrl+Shift+Z** · **Ctrl+S** save · **Ctrl+E** export · **[ ]** brush size · hold **Shift** to smooth, **Ctrl** to invert · **Tab** hide UI · **?** all shortcuts.
+- **Send to Godot** with a **live link** (every save updates the model in your Godot project), per-object **collision** (StaticBody, convex, RigidBody, NavigationMesh) and named, looping **animation clips**. **Send to Blender** opens the model in Blender in one click. Presets for Godot 4, Blender, Unity, Unreal, web/AR and 3D printing.
+- **Groups & hierarchy**, multi-select with box select, **booleans** (union / subtract / intersect), **push/pull faces**, align & distribute, arrays, snapping, measure tool, units, cameras and empties, custom properties (glTF extras).
+- **Texture painting** with straight lines, eraser and eyedropper, automatic **smart UV unwrap**, and a full **colour wheel** throughout the app.
+- Physically based materials (clearcoat, glass transmission + IOR, sheen, iridescence), every PBR texture map, shared materials.
+- Sculpting, vertex paint, 3D text with your PC's fonts, draw-to-3D, 20 templates, lights, keyframes with easing.
+- Export **GLB, glTF, glTF + files, USDZ, OBJ + MTL, STL, PLY, PNG renders**; import GLB/glTF, OBJ, FBX, Collada, 3MF, STL and PLY with their hierarchy.
+- **Accessible**: menu bar and Ctrl+K command palette, full keyboard control, screen-reader labels, light / high-contrast themes, colour-blind-safe axis colours.
+- **Projects move freely between phone and PC**: every project is a standard `.glb` with the editing data inside.
+- Shortcuts: **Ctrl+K** any command · **1–5** modes · **Q/W/E/R/M** select/move/rotate/scale/measure · **Ctrl+G** group · **Ctrl+J** join · **F** frame · **Shift+A** add · **L / I** paint line / eyedropper · **Ctrl+S** save (and sync to Godot) · **?** all shortcuts.
 
 > The installers are not code-signed yet. Windows SmartScreen may show *“Windows protected your PC”* → **More info → Run anyway**. On macOS, right-click the app → **Open** the first time.
 

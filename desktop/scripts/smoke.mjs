@@ -17,7 +17,9 @@ try {
   const visible = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map((w) => w.isVisible()));
   if (!visible.some(Boolean)) throw new Error('window is not visible');
   await page.screenshot({ path: `${out}/home.png` });
+  await page.waitForTimeout(1200); // the welcome dialog opens shortly after start
   await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
   await page.locator('.create').nth(1).click();
   await page.waitForFunction(() => window.app?.editor?.doc?.objects?.length > 0, null, { timeout: 30000 });
   await page.waitForTimeout(1500);

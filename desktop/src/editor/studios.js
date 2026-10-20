@@ -8,7 +8,8 @@ import { normalize, computeNormals } from '../core/mesh.js';
 import { isMesh, prepareGeometry, makeMesh, newMaterial, syncTextures } from './model.js';
 import { PATTERNS, defaultSpec, previewCanvas, applyPattern, imageTexture, applyImage, stickerTexture } from './textures.js';
 import { BUILTIN, cssFamily, importedFonts, systemFonts, importFontFiles, fontName } from './fonts.js';
-import { FORMATS, exportModel, parseGltf } from './io.js';
+import { FORMATS, exportModel, parseGltf, zip } from './io.js';
+import * as PL from './pipeline.js';
 import { platform, IMAGE_FILTERS, FONT_FILTERS, isDesktop } from '../platform.js';
 
 // =============================================================================== Add gallery
@@ -23,13 +24,16 @@ export function addMenu(ed) {
       tile('sticker', 'Sticker', () => stickerDialog(ed), 'Emoji, shapes or images on a surface'),
       tile('image', 'Image plane', () => imagePlane(ed), 'A picture as a flat 3D card'),
       tile('layout-template', 'Template', () => templatePicker(ed), 'Insert a ready-made model'),
-      tile('download', 'Import', () => ed.importFiles(), 'GLB, glTF, OBJ, STL, PLY, FBX')),
+      tile('download', 'Import', () => ed.importFiles(), 'GLB, glTF, OBJ, FBX, DAE, 3MF, STL, PLY')),
     section('Basic shapes'), shapeTiles(BASIC),
     section('More shapes'), shapeTiles(MORE),
-    section('Lights'), h('div', { class: 'tile-grid' },
+    section('Lights, cameras & helpers'), h('div', { class: 'tile-grid' },
       tile('lightbulb', 'Point', () => ed.actions.addLight('point'), 'Bulb that shines in all directions'),
       tile('flashlight', 'Spot', () => ed.actions.addLight('spot'), 'Cone of light'),
-      tile('sun', 'Sun', () => ed.actions.addLight('directional'), 'Parallel light like the sun')),
+      tile('sun', 'Sun', () => ed.actions.addLight('directional'), 'Parallel light like the sun'),
+      tile('video', 'Camera', () => ed.actions.addCamera(), 'A camera placed at the current view'),
+      tile('move-3d', 'Empty', () => ed.actions.addEmpty(), 'A named point: parent things to it, or use it as a spawn point'),
+      tile('group', 'Group', () => ed.actions.group(), 'Group the selected objects')),
   );
   const m = modal({ title: 'Add to scene', body, wide: true, icon: 'plus' });
 }
@@ -330,58 +334,85 @@ export async function templatePicker(ed, onPick = null) {
 
 // =============================================================================== export
 export const EXPORT_PRESETS = [
-  { id: 'original', label: 'Original', icon: 'gem', desc: 'Everything as it is: full detail, textures and animation.', opts: { format: 'glb', maxTris: 0, textureMax: 0, origin: 'keep' } },
-  { id: 'game', label: 'Game ready', icon: 'gamepad-2', desc: 'Unity, Godot, Roblox, Unreal: ≤ 50k tris, 1K textures, pivot at the base.', opts: { format: 'glb', maxTris: 50000, textureMax: 1024, origin: 'bottom' } },
-  { id: 'web', label: 'Web & AR', icon: 'globe', desc: 'Light for websites and Android AR: ≤ 100k tris, 2K textures.', opts: { format: 'glb', maxTris: 100000, textureMax: 2048, origin: 'bottom' } },
+  { id: 'original', label: 'Original', icon: 'gem', desc: 'Everything as it is: full detail, textures, hierarchy, animation.', opts: { format: 'glb' } },
+  { id: 'godot', label: 'Godot 4', icon: 'gamepad-2', desc: 'GLB with collision & loop hints, scale applied, 2K textures.', opts: { format: 'glb', godot: true, applyScale: true, textureMax: 2048 } },
+  { id: 'blender', label: 'Blender', icon: 'send', desc: 'Full-detail GLB: hierarchy, cameras, lights, custom properties.', opts: { format: 'glb' } },
+  { id: 'unity', label: 'Unity', icon: 'boxes', desc: 'GLB for glTFast: scale applied, 2K textures.', opts: { format: 'glb', applyScale: true, textureMax: 2048 } },
+  { id: 'unreal', label: 'Unreal', icon: 'box', desc: 'GLB for Unreal 5’s glTF import, 2K textures.', opts: { format: 'glb', applyScale: true, textureMax: 2048 } },
+  { id: 'web', label: 'Web & AR', icon: 'globe', desc: 'Light for websites and Android AR: ≤ 100k tris, 2K textures.', opts: { format: 'glb', maxTris: 100000, textureMax: 2048, origin: 'bottom', cameras: false } },
   { id: 'apple', label: 'iPhone AR', icon: 'smartphone', desc: 'USDZ for AR Quick Look on iPhone and iPad.', opts: { format: 'usdz', maxTris: 150000, textureMax: 2048, origin: 'bottom' } },
   { id: 'print', label: '3D print', icon: 'printer', desc: 'STL in millimetres, Z-up, one solid piece.', opts: { format: 'stl', units: 'mm', upZ: true, origin: 'bottom', merge: true } },
-  { id: 'blender', label: 'Other 3D apps', icon: 'boxes', desc: 'OBJ + MTL + textures in a zip for any 3D software.', opts: { format: 'obj', maxTris: 0, textureMax: 2048 } },
+  { id: 'obj', label: 'Other apps', icon: 'package', desc: 'OBJ + MTL + textures in a zip for any 3D software.', opts: { format: 'obj', textureMax: 2048 } },
 ];
+const DEFAULT_EXPORT = { units: 'm', upZ: false, merge: false, maxTris: 0, textureMax: 0, origin: 'keep', godot: false, applyScale: false, cameras: true, lights: true, props: true, animations: true, vertexColors: true };
+const IMAGE_SIZES = [['1920x1080', 'Full HD'], ['3840x2160', '4K'], ['2048x2048', 'Square 2K'], ['1080x1920', 'Portrait'], ['1024x1024', 'Icon 1K']];
 export function exportDialog(ed, extra = {}) {
   const d = ed.doc;
   if (!d.objects.length) { toast('Nothing to export yet'); return; }
-  const o = { preset: 'original', format: 'glb', name: safeName(d.name), includeHidden: false, onlySelected: !!extra.onlySelected, animations: true, lights: true, vertexColors: true, origin: 'keep', scale: 1, units: 'm', upZ: false, merge: false, maxTris: 0, textureMax: 0, ...extra };
-  const summary = h('div', { class: 'summary' });
+  const last = ed.settings.lastExportOpts || {};
+  const o = { preset: 'original', name: safeName(d.name), includeHidden: false, onlySelected: false, scale: 1, ...DEFAULT_EXPORT, format: 'glb', imgSize: '1920x1080', transparent: true, ...(extra.format ? {} : last), ...extra };
+  o.name = safeName(d.name); if (extra.onlySelected) o.onlySelected = true;
+  const summary = h('div', { class: 'summary', 'aria-live': 'polite' });
   const optsHost = h('div');
   let estTimer = 0, estGen = 0;
-  const totalTris = () => (o.onlySelected && d.selected ? [d.selected] : d.objects).filter((x) => isMesh(x) && (o.includeHidden || x.visible)).reduce((a, x) => a + x.geometry.index.count / 3, 0);
+  const totalTris = () => (o.onlySelected && d.selection.length ? d.selection.flatMap((x) => [x, ...d.descendants(x)]) : d.objects).filter((x) => isMesh(x) && !x.ed.noExport && (o.includeHidden || d.isShown(x))).reduce((a, x) => a + x.geometry.index.count / 3, 0);
+  const sizeEl = h('b', { style: { fontSize: '15px' } });
   const updateSummary = () => {
-    const tris = totalTris(), out = o.maxTris && tris > o.maxTris ? o.maxTris : tris;
     const f = FORMATS.find((x) => x.id === o.format);
+    if (o.format === 'png') {
+      mount(summary, h('div', { class: 'row' }, h('div', { class: 'grow' }, h('b', null, `${o.name}.png`), h('div', { class: 'muted' }, `${o.imgSize.replace('x', ' × ')} px · ${o.transparent ? 'transparent background' : 'with background'} · current view`))));
+      return;
+    }
+    const tris = totalTris(), out = o.maxTris && tris > o.maxTris ? o.maxTris : tris;
     const warns = [];
     if (o.format === 'stl') warns.push('STL stores shape only – no colours, textures or animation.');
-    if (o.format === 'obj' && d.hasAnimation()) warns.push('OBJ can’t store animation.');
+    if (o.format === 'obj' && d.hasAnimation()) warns.push('OBJ can’t store animation or hierarchy.');
     if (o.format === 'usdz' && d.hasAnimation()) warns.push('Animation isn’t included in USDZ.');
-    if (o.format === 'usdz' && d.meshes.some((x) => x.material.vertexColors && x.geometry.attributes.color)) warns.push('USDZ ignores vertex paint – use textures for colour in AR.');
+    if (o.format === 'usdz' && d.meshes.some((x) => x.material.vertexColors && x.geometry.attributes.color)) warns.push('USDZ ignores vertex paint – paint on the texture instead for AR.');
     if ((o.format === 'ply' || o.format === 'stl') && d.meshes.some((x) => x.material.map)) warns.push('Textures are not included in ' + f.label + '.');
     if (out > 500000) warns.push('Over 500k triangles – consider a triangle budget for games, web or AR.');
     if (o.maxTris && tris > o.maxTris) warns.push(`Simplifying ${Math.round(tris).toLocaleString()} → ${o.maxTris.toLocaleString()} triangles (your project is not changed).`);
+    const excluded = d.objects.filter((x) => x.ed.noExport).length; if (excluded) warns.push(`${excluded} object${excluded > 1 ? 's are' : ' is'} set to “not exported”.`);
+    if (o.godot) { const cols = d.meshes.filter((x) => x.ed.collision && x.ed.collision !== 'none').length; warns.push(cols ? `${cols} object${cols > 1 ? 's' : ''} get Godot collision.` : 'Tip: set Collision on objects (Object tab) to get physics bodies in Godot.'); }
     mount(summary, h('div', { class: 'row' }, h('div', { class: 'grow' }, h('b', null, `${o.name}.${f.ext}`), h('div', { class: 'muted' }, `${Math.round(out).toLocaleString()} triangles · ${f.desc}`)), sizeEl),
-      warns.map((w) => h('div', { class: 'warn' }, icon('triangle-alert'), h('span', null, w))));
+      warns.map((w) => h('div', { class: 'warn' }, icon(w.startsWith('Tip') || /get Godot/.test(w) ? 'info' : 'triangle-alert'), h('span', null, w))));
     clearTimeout(estTimer);
     const g = ++estGen;
     sizeEl.textContent = 'Estimating…';
     estTimer = setTimeout(async () => {
-      try { const r = await exportModel(d, { ...o }); if (g === estGen) sizeEl.textContent = '≈ ' + bytes(r.data.byteLength); } catch (e) { if (g === estGen) sizeEl.textContent = ''; console.warn(e); }
+      try { const r = await exportModel(d, { ...o }); if (g === estGen) sizeEl.textContent = '≈ ' + bytes(r.files ? r.files.reduce((a, x) => a + x[1].byteLength, 0) : r.data.byteLength) + (r.files ? ` · ${r.files.length} files` : ''); } catch (e) { if (g === estGen) sizeEl.textContent = ''; console.warn(e); }
     }, 450);
   };
-  const sizeEl = h('b', { style: { fontSize: '15px' } });
   const renderOpts = () => {
-    const mesh = ['stl', 'ply', 'obj'].includes(o.format);
+    const mesh = ['stl', 'ply', 'obj'].includes(o.format), gltf = ['glb', 'gltf', 'gltfsep'].includes(o.format);
+    if (o.format === 'png') {
+      mount(optsHost,
+        section('Format'), seg(FORMATS.map((f) => [f.id, f.label, null, f.desc]), o.format, (v) => { o.format = v; o.preset = null; renderAll(); }, 'accent', 'Format'),
+        section('File name'), h('input', { class: 'field', value: o.name, 'aria-label': 'File name', oninput: (e) => { o.name = safeName(e.target.value) || 'render'; updateSummary(); } }),
+        section('Image size'), seg(IMAGE_SIZES.map(([v, l]) => [v, l, null, v.replace('x', ' × ')]), o.imgSize, (v) => { o.imgSize = v; updateSummary(); }, '', 'Image size'),
+        toggle('Transparent background', o.transparent, (v) => { o.transparent = v; updateSummary(); }, 'Keeps the soft floor shadow'),
+        h('p', { class: 'muted' }, 'Renders exactly what the viewport camera sees, with your materials and lighting but without the grid, gizmos or outlines.'));
+      return;
+    }
     mount(optsHost,
       section('Format'), seg(FORMATS.map((f) => [f.id, f.label, null, f.desc]), o.format, (v) => { o.format = v; o.preset = null; renderAll(); }, 'accent', 'Format'),
       section('File name'), h('input', { class: 'field', value: o.name, 'aria-label': 'File name', oninput: (e) => { o.name = safeName(e.target.value) || 'model'; updateSummary(); } }),
       section('What to include'),
-      toggle('Only the selected object', o.onlySelected, (v) => { o.onlySelected = v; updateSummary(); }, d.selected ? d.selected.name : 'Nothing selected'),
+      toggle('Only the selection', o.onlySelected, (v) => { o.onlySelected = v; updateSummary(); }, d.selection.length ? `${d.selection.length} selected (with children)` : 'Nothing selected'),
       toggle('Hidden objects', o.includeHidden, (v) => { o.includeHidden = v; updateSummary(); }),
-      !mesh && o.format !== 'usdz' && toggle('Animation', o.animations, (v) => { o.animations = v; updateSummary(); }, d.hasAnimation() ? 'Keyframes as a glTF animation clip' : 'No animation in this project'),
+      !mesh && o.format !== 'usdz' && toggle('Animation', o.animations, (v) => { o.animations = v; updateSummary(); }, d.hasAnimation() ? (d.clips.length ? `${d.clips.length} named clips` : 'One clip for the whole timeline') : 'No animation in this project'),
       !mesh && toggle('Lights', o.lights, (v) => { o.lights = v; updateSummary(); }),
+      gltf && toggle('Cameras', o.cameras, (v) => { o.cameras = v; updateSummary(); }),
+      gltf && toggle('Custom properties', o.props, (v) => { o.props = v; updateSummary(); }, 'As glTF extras (Blender custom properties, Godot metadata)'),
       o.format !== 'stl' && toggle('Vertex paint', o.vertexColors, (v) => { o.vertexColors = v; updateSummary(); }),
-      o.format !== 'stl' && toggle('Merge into one mesh', o.merge, (v) => { o.merge = v; updateSummary(); }, 'Single object (removes animation)'),
+      o.format !== 'stl' && toggle('Merge into one mesh', o.merge, (v) => { o.merge = v; updateSummary(); }, 'Single object (removes animation and hierarchy)'),
+      gltf && section('Game engine'),
+      gltf && toggle('Godot import hints', o.godot, (v) => { o.godot = v; o.preset = null; renderPresets(); updateSummary(); }, 'Collision (-col, -convcol, -rigid…) and -loop on looping clips'),
+      gltf && toggle('Apply scale to static meshes', o.applyScale, (v) => { o.applyScale = v; updateSummary(); }, 'Unit scale for physics and collision shapes'),
       section('Placement & size'),
       h('div', { class: 'label', style: { marginBottom: '6px' } }, 'Pivot / origin'),
       seg([['keep', 'As in scene'], ['center', 'Centre'], ['bottom', 'Bottom centre']], o.origin, (v) => { o.origin = v; updateSummary(); }),
-      mesh ? h('div', null, h('div', { class: 'label', style: { margin: '10px 0 6px' } }, 'Units'), seg([['m', 'Metres'], ['cm', 'Centimetres'], ['mm', 'Millimetres'], ['in', 'Inches']], o.units, (v) => { o.units = v; updateSummary(); }), toggle('Z axis up', o.upZ, (v) => { o.upZ = v; updateSummary(); }, 'For slicers, CAD and Blender-style coordinates'))
+      mesh ? h('div', null, h('div', { class: 'label', style: { margin: '10px 0 6px' } }, 'Units'), seg([['m', 'Metres'], ['cm', 'Centimetres'], ['mm', 'Millimetres'], ['in', 'Inches']], o.units, (v) => { o.units = v; updateSummary(); }), toggle('Z axis up', o.upZ, (v) => { o.upZ = v; updateSummary(); }, 'For slicers, CAD and Z-up apps'))
         : slider({ label: 'Scale', min: 0.01, max: 10, step: 0.01, value: o.scale, format: (v) => '×' + v.toFixed(2), onCommit: (v) => { o.scale = v; updateSummary(); } }),
       section('Optimise'),
       h('div', { class: 'label', style: { marginBottom: '6px' } }, 'Triangle budget'),
@@ -389,43 +420,121 @@ export function exportDialog(ed, extra = {}) {
       o.format !== 'stl' && o.format !== 'ply' && h('div', null, h('div', { class: 'label', style: { margin: '10px 0 6px' } }, 'Max texture size'), seg([[0, 'Original'], [4096, '4K'], [2048, '2K'], [1024, '1K'], [512, '512']], o.textureMax, (v) => { o.textureMax = v; updateSummary(); })),
     );
   };
-  const presetRow = h('div', { class: 'hscroll' });
-  const renderPresets = () => mount(presetRow, EXPORT_PRESETS.map((p) => h('button', { class: 'presetcard' + (o.preset === p.id ? ' on' : ''), 'aria-pressed': String(o.preset === p.id), onclick: () => { Object.assign(o, { units: 'm', upZ: false, merge: false, maxTris: 0, textureMax: 0, origin: 'keep' }, p.opts, { preset: p.id }); renderAll(); } }, icon(p.icon), h('b', null, p.label), h('span', null, p.desc))));
+  const presetRow = h('div', { class: 'hscroll', role: 'radiogroup', 'aria-label': 'Export presets' });
+  const renderPresets = () => mount(presetRow, EXPORT_PRESETS.map((p) => h('button', { class: 'presetcard' + (o.preset === p.id ? ' on' : ''), role: 'radio', 'aria-checked': String(o.preset === p.id), onclick: () => { Object.assign(o, DEFAULT_EXPORT, p.opts, { preset: p.id }); renderAll(); } }, icon(p.icon), h('b', null, p.label), h('span', null, p.desc))));
   const renderAll = () => { renderPresets(); renderOpts(); updateSummary(); };
-  const body = h('div', null, section('Presets'), presetRow, h('div', { style: { margin: '14px 0 0' } }, summary), optsHost);
+  const pipeRow = isDesktop ? h('div', { class: 'row', style: { marginTop: '12px', flexWrap: 'wrap' } }, h('span', { class: 'label' }, 'Straight into:'), btn(d.link?.kind === 'godot' ? `Godot (${d.link.project || 'linked'})` : 'Godot project…', () => { m.close(); PL.sendToGodot(ed); }, 'tinted', 'gamepad-2'), btn('Blender', () => { m.close(); PL.sendToBlender(ed); }, 'tinted', 'send')) : null;
+  const body = h('div', null, section('Presets'), presetRow, pipeRow, h('div', { style: { margin: '14px 0 0' } }, summary), optsHost);
   const doExport = async () => {
-    const b = busy('Exporting…');
-    try {
-      const f = FORMATS.find((x) => x.id === o.format);
-      const r = await exportModel(d, { ...o });
-      b.close();
-      const path = await platform.files.save(`${o.name}.${f.ext}`, r.data, [{ name: f.label, extensions: [f.ext] }]);
-      if (!path) return;
-      m.close();
-      r.warnings.forEach((w) => toast(w, 4000));
-      if (isDesktop && typeof path === 'string') {
-        const t = h('div', { class: 'hint', role: 'status' }, icon('circle-check'), h('p', null, `Exported ${bytes(r.data.byteLength)} → ${path}`), btn('Show in folder', () => { platform.files.reveal(path); t.remove(); }, 'tinted'), ibtn('x', 'Dismiss', () => t.remove()));
-        mount(ed.hintHost, t); setTimeout(() => t.remove(), 10000);
-      } else toast('Exported ' + bytes(r.data.byteLength));
-    } catch (e) { console.error(e); b.close(); toast('Export failed: ' + e.message, 5000); }
+    ed.settings.lastExportOpts = { ...o, name: undefined, onlySelected: undefined }; ed.saveSettings();
+    m.close();
+    await runExport(ed, { ...o });
   };
-  const m = modal({ title: 'Export', icon: 'share', body, wide: true, footer: [btn('Cancel', () => m.close(), 'ghost'), btn('Export…', doExport, 'primary lg', 'share')], onClose: () => { estGen++; clearTimeout(estTimer); } });
+  const m = modal({ title: 'Export', icon: 'share', body, wide: true, footer: [btn('Help: Godot & Blender', () => PL.pipelineHelp(ed), 'ghost', 'circle-help'), h('div', { class: 'grow' }), btn('Cancel', () => m.close(), 'ghost'), btn(o.format === 'png' ? 'Render…' : 'Export…', doExport, 'primary lg', 'share')], onClose: () => { estGen++; clearTimeout(estTimer); } });
   renderAll();
+}
+/** Runs an export and saves the result (one file, a folder of files, or a PNG render). */
+async function runExport(ed, o) {
+  const d = ed.doc, b = busy(o.format === 'png' ? 'Rendering…' : 'Exporting…');
+  try {
+    const f = FORMATS.find((x) => x.id === o.format);
+    if (o.format === 'png') {
+      const [w, hh] = o.imgSize.split('x').map(Number);
+      const png = await ed.vp.renderImage({ width: w, height: hh, transparent: o.transparent });
+      b.close();
+      const path = await platform.files.save(`${o.name}.png`, png, [{ name: 'PNG image', extensions: ['png'] }]);
+      if (path) done(ed, path, png.byteLength);
+      ed.lastExport = o; return;
+    }
+    const r = await exportModel(d, { ...o });
+    b.close();
+    let path, size;
+    if (r.files) {
+      size = r.files.reduce((a, x) => a + x[1].byteLength, 0);
+      if (isDesktop) {
+        const pick = await platform.pipeline.pickDir({ title: `Choose a folder for ${o.name}.gltf and its ${r.files.length - 1} files` });
+        if (!pick) return;
+        const paths = await platform.pipeline.write(pick.dir, '', r.files.map(([n, x]) => [n, x instanceof Uint8Array ? x : new Uint8Array(x)]));
+        path = paths[0];
+      } else path = await platform.files.save(`${o.name}.zip`, zip(r.files.map(([n, x]) => [n, x instanceof Uint8Array ? x : new Uint8Array(x)])), [{ name: 'Zip', extensions: ['zip'] }]);
+    } else {
+      size = r.data.byteLength;
+      path = await platform.files.save(`${o.name}.${f.ext}`, r.data, [{ name: f.label, extensions: [f.ext] }]);
+    }
+    if (!path) return;
+    ed.lastExport = o;
+    r.warnings.forEach((w) => toast(w, 4000));
+    done(ed, path, size);
+  } catch (e) { console.error(e); b.close(); toast('Export failed: ' + e.message, 5000); }
+}
+function done(ed, path, size) {
+  if (isDesktop && typeof path === 'string') {
+    const t = h('div', { class: 'hint', role: 'status' }, icon('circle-check'), h('p', null, `Exported ${bytes(size)} → ${path}`), btn('Show in folder', () => { platform.files.reveal(path); t.remove(); }, 'tinted'), ibtn('x', 'Dismiss', () => t.remove()));
+    mount(ed.hintHost, t); setTimeout(() => t.remove(), 10000);
+  } else toast('Exported ' + bytes(size));
+}
+/** Ctrl+Shift+E: repeats the last export with the same settings (asks where to save). */
+export function quickExport(ed) {
+  if (!ed.lastExport) { exportDialog(ed); return; }
+  runExport(ed, { ...ed.lastExport, name: safeName(ed.doc.name) });
 }
 const safeName = (s) => (s || 'model').replace(/[\\/:*?"<>|]+/g, '').trim().slice(0, 80);
 export const bytes = (n) => (n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(1) + ' MB');
 
+// =============================================================================== array
+export function arrayDialog(ed) {
+  const o = ed.doc.selected; if (!o) { toast('Select an object'); return; }
+  const st = { mode: 'linear', count: 5, axis: 'x', gap: 0.1, angle: 360, rotate: true };
+  const host = h('div');
+  const render = () => mount(host,
+    seg([['linear', 'In a line', 'move-horizontal'], ['radial', 'In a circle', 'rotate-3d']], st.mode, (v) => { st.mode = v; render(); }, 'accent', 'Array type'),
+    slider({ label: 'Count', min: 2, max: 64, int: true, value: st.count, onInput: (v) => { st.count = v; } }),
+    st.mode === 'linear' ? [h('div', { class: 'label', style: { margin: '8px 0 6px' } }, 'Direction'), seg([['x', 'X'], ['y', 'Y'], ['z', 'Z']], st.axis, (v) => { st.axis = v; }, '', 'Axis'),
+      slider({ label: 'Gap between copies', min: -1, max: 5, step: 0.01, unit: ' m', value: st.gap, onInput: (v) => { st.gap = v; } })]
+      : [slider({ label: 'Total angle', min: 30, max: 360, step: 5, unit: '°', value: st.angle, onInput: (v) => { st.angle = v; } }), toggle('Rotate copies to face out', st.rotate, (v) => { st.rotate = v; })],
+    h('p', { class: 'muted' }, 'The original and its copies are put in a new group, so you can move them together.'));
+  render();
+  const m = modal({ title: `Array “${o.name}”`, icon: 'copy-plus', body: host, footer: [btn('Cancel', () => m.close(), 'ghost'), btn('Create', () => { m.close(); ed.actions.array(o, st); }, 'primary', 'copy-plus')] });
+}
+
+// =============================================================================== animation clips
+/** Named ranges of the timeline: each becomes its own animation (Idle, Walk, Open…) in GLB exports. */
+export function clipsDialog(ed) {
+  const d = ed.doc, list = d.clips.map((c) => ({ ...c }));
+  const host = h('div');
+  const num = (c, k, lbl) => h('input', { class: 'field cw-num', type: 'number', min: '0', max: String(d.frameCount), value: c[k], 'aria-label': `${c.name} ${lbl}`, onchange: (e) => { c[k] = Math.max(0, Math.min(d.frameCount, Math.round(+e.target.value || 0))); } });
+  const render = () => mount(host,
+    h('p', { class: 'muted' }, `Timeline: 0 – ${d.frameCount} frames at ${d.fps} fps. Without clips, the whole timeline exports as one animation called “Animation”.`),
+    list.length ? h('div', { class: 'cliptable', role: 'table', 'aria-label': 'Clips' },
+      h('div', { class: 'cliprow head', role: 'row' }, h('span', { role: 'columnheader' }, 'Name'), h('span', { role: 'columnheader' }, 'Start'), h('span', { role: 'columnheader' }, 'End'), h('span', { role: 'columnheader' }, 'Loop'), h('span')),
+      list.map((c, i) => h('div', { class: 'cliprow', role: 'row' },
+        h('input', { class: 'field', value: c.name, 'aria-label': `Clip ${i + 1} name`, oninput: (e) => { c.name = e.target.value.trim() || 'Clip'; } }),
+        num(c, 'start', 'start frame'), num(c, 'end', 'end frame'),
+        h('button', { class: 'switch', role: 'switch', 'aria-checked': String(!!c.loop), 'aria-label': `${c.name} loops`, onclick: (e) => { c.loop = !c.loop; e.currentTarget.setAttribute('aria-checked', String(c.loop)); } }),
+        ibtn('trash-2', `Delete ${c.name}`, () => { list.splice(i, 1); render(); })))) : h('div', { class: 'empty', style: { padding: '20px' } }, 'No clips yet.'),
+    h('div', { class: 'row', style: { marginTop: '10px', flexWrap: 'wrap' } },
+      btn('Add clip', () => { const s = list.length ? Math.min(d.frameCount, list[list.length - 1].end + 1) : 0; list.push({ name: ['Idle', 'Walk', 'Run', 'Jump', 'Open', 'Close'][list.length] || 'Clip ' + (list.length + 1), start: s, end: Math.min(d.frameCount, s + Math.max(10, Math.round(d.fps))), loop: true }); render(); }, 'tinted', 'plus'),
+      btn('Clip from keys of selection', () => { const ks = d.selection.flatMap((o) => [...o.ed.keys.keys()]); if (!ks.length) { toast('Selection has no keys'); return; } list.push({ name: 'Clip ' + (list.length + 1), start: Math.min(...ks), end: Math.max(...ks), loop: true }); render(); }, 'ghost', 'diamond')),
+    h('p', { class: 'muted' }, 'Godot: looping clips are exported with “-loop” when Godot hints are on. Blender: each clip becomes an Action.'));
+  render();
+  const m = modal({ title: 'Animation clips', icon: 'film', body: host, wide: true, footer: [btn('Cancel', () => m.close(), 'ghost'), btn('Save clips', () => {
+    const clean = list.map((c) => ({ name: c.name.replace(/[^\w\- ]+/g, '').trim() || 'Clip', start: Math.min(c.start, c.end), end: Math.max(c.start, c.end), loop: !!c.loop })).filter((c) => c.end > c.start);
+    d.transact('Animation clips', () => { d.clips = clean; }, []);
+    if (ed.playClip && !d.clips.includes(ed.playClip)) ed.playClip = null;
+    m.close(); if (ed.mode === 'animate') ed.renderTimeline();
+  }, 'primary', 'check')] });
+}
+
 // =============================================================================== shortcuts
 export function shortcutsDialog() {
-  const rows = [
-    ['Orbit', 'Left-drag empty space · Right-drag · Alt+drag'], ['Pan', 'Middle-drag · Shift+drag'], ['Zoom', 'Scroll (towards the cursor)'], ['Frame selection / all', 'F / Home'],
-    ['Front · Right · Top · Ortho', 'Numpad 1 · 3 · 7 · 5'], ['Modes: Object, Sculpt, Paint, Faces, Animate', '1 – 5'],
-    ['Select · Move · Rotate · Scale', 'Q · W · E · R'], ['Add menu', 'Shift+A'], ['3D text', 'T'], ['Duplicate', 'Ctrl+D'], ['Delete', 'Del'],
-    ['Hide / show all', 'H / Alt+H'], ['Undo / redo', 'Ctrl+Z / Ctrl+Shift+Z'], ['Save', 'Ctrl+S'], ['Import', 'Ctrl+I'], ['Export', 'Ctrl+E'],
-    ['Brush size', '[ and ]  ·  Ctrl+scroll'], ['Smooth while sculpting', 'hold Shift'], ['Invert brush / deselect faces', 'hold Ctrl'],
-    ['Brushes: Clay, Draw, Smooth, Inflate, Pinch, Grab, Mask, Layer', 'C D S I P G M L'], ['Symmetry X', 'X'],
-    ['Play / pause · Keyframe', 'Space · K'], ['Previous / next frame', '← / →'], ['Hide the interface', 'Tab'], ['Close project', 'Ctrl+W'],
+  const groups = [
+    ['Navigate', [['Orbit', 'Left-drag empty space · Right-drag · Alt+drag · Numpad 2 4 6 8 · Alt+arrows'], ['Pan', 'Middle-drag · Shift+drag'], ['Zoom', 'Scroll · = / −'], ['Frame selection / all', 'F / Home'], ['Front · Right · Top · Ortho', 'Numpad 1 · 3 · 7 · 5 (Ctrl = opposite side)'], ['Look through camera', 'Numpad 0']]],
+    ['Select', [['Select / add / toggle', 'Click · Shift+click · Ctrl+click'], ['Pick inside a group', 'Double-click · Alt+click'], ['Box select', 'Ctrl+drag, or drag with the Select tool (Q)'], ['All · none · invert', 'Ctrl+A · Alt+A · Ctrl+Shift+I'], ['Previous / next object', '[ / ]']]],
+    ['Object', [['Select · Move · Rotate · Scale · Measure', 'Q · W · E · R · M'], ['Nudge selection', 'Arrows (Shift = ×10) · PageUp/PageDown = depth'], ['Snapping on/off', 'Shift+Tab (hold Ctrl while dragging to flip)'], ['Add menu · 3D text', 'Shift+A · T'], ['Duplicate · copy · paste', 'Ctrl+D · Ctrl+C · Ctrl+V'], ['Group · ungroup', 'Ctrl+G · Ctrl+Shift+G'], ['Parent to active · clear parent', 'Ctrl+P · Alt+P'], ['Join meshes', 'Ctrl+J'], ['Hide · hide others · show all', 'H · Shift+H · Alt+H'], ['Rename · delete', 'F2 · Del']]],
+    ['Modes & brushes', [['Object · Sculpt · Paint · Faces · Animate', '1 – 5'], ['Brush size', '[ and ] · Ctrl+scroll'], ['Sculpt: Clay Draw Smooth Inflate Pinch Grab Mask Layer', 'C D S I P G M L'], ['Smooth / invert while sculpting', 'hold Shift / Ctrl'], ['Paint: line · brush · eraser · eyedropper', 'L · B · E · I'], ['Straight line from last point', 'Shift+click'], ['Faces: add / remove', 'Shift+click / Ctrl+click']]],
+    ['Animate', [['Play / pause · Keyframe', 'Space · K'], ['Previous / next frame', '← / → (Shift = 10)']]],
+    ['App', [['Command palette', 'Ctrl+K or F3'], ['Menu bar', 'Alt or F10'], ['Undo / redo', 'Ctrl+Z / Ctrl+Shift+Z'], ['Save · import · export · repeat export', 'Ctrl+S · Ctrl+I · Ctrl+E · Ctrl+Shift+E'], ['Render image', 'F12'], ['X-ray · wireframe', 'Alt+Z · Shift+Z'], ['Hide the interface', 'Ctrl+\\'], ['Settings · close project', 'Ctrl+, · Ctrl+W']]],
   ];
-  modal({ title: 'Keyboard & mouse', icon: 'keyboard', body: h('div', { class: 'kbdlist' }, rows.map(([a, b]) => [h('span', null, a), h('kbd', null, b)])) });
+  modal({ title: 'Keyboard & mouse', icon: 'keyboard', wide: true, body: h('div', { class: 'kbdcols' }, groups.map(([title, rows]) => h('section', null, h('h3', null, title), h('div', { class: 'kbdlist' }, rows.map(([a, b]) => [h('span', null, a), h('kbd', null, b)]))))) });
 }
 export { syncTextures, makeMesh, newMaterial, prepareGeometry, stickerTexture, menu, select, ibtn };

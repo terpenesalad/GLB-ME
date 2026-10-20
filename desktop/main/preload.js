@@ -29,6 +29,15 @@ contextBridge.exposeInMainWorld('glbme', {
     import: (name, data) => ipcRenderer.invoke('fonts:import', name, data),
     remove: (id) => ipcRenderer.invoke('fonts:delete', id),
   },
+  pipeline: {
+    pickDir: (opts) => ipcRenderer.invoke('pipe:pickDir', opts),
+    inspect: (dir) => ipcRenderer.invoke('pipe:inspect', dir),
+    write: (dir, sub, files) => ipcRenderer.invoke('pipe:write', dir, sub, files),
+    writeTemp: (name, data) => ipcRenderer.invoke('pipe:writeTemp', name, data),
+    findTool: (tool) => ipcRenderer.invoke('pipe:findTool', tool),
+    pickTool: (tool) => ipcRenderer.invoke('pipe:pickTool', tool),
+    launch: (tool, target) => ipcRenderer.invoke('pipe:launch', tool, target),
+  },
   app: {
     pending: () => ipcRenderer.invoke('app:pending'),
     version: () => ipcRenderer.invoke('app:version'),

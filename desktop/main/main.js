@@ -80,7 +80,7 @@ function showError(msg, reloadable = false) {
 }
 
 // ---- single instance + "open with" ---------------------------------------------------------
-const fileArgs = (argv) => argv.filter((a) => /\.(glb|gltf|obj|stl|ply|fbx)$/i.test(a) && fs.existsSync(a));
+const fileArgs = (argv) => argv.filter((a) => /\.(glb|gltf|obj|stl|ply|fbx|dae|3mf)$/i.test(a) && fs.existsSync(a));
 // The first desktop build (GLB&ME.exe) could get stuck running invisibly in the background, which
 // holds the single-instance lock so every later launch quit silently. A healthy instance writes a
 // heartbeat file; if the lock is busy but there's no fresh heartbeat, the old process is cleared.
@@ -251,4 +251,146 @@ ipcMain.handle('fonts:system', () => {
   };
   dirs.forEach((d) => walk(d, 0));
   return out.slice(0, 3000);
+});
+
+// ---- IPC: pipeline (Godot projects, Blender, folder exports) ----------------------------------
+// Folders the user picked in a dialog are remembered so live links keep working after a restart.
+const pipeFile = () => path.join(app.getPath('userData'), 'pipeline.json');
+const pipe = () => readJson(pipeFile(), { dirs: [], tools: {} });
+const savePipe = (p) => { try { fs.writeFileSync(pipeFile(), JSON.stringify(p)); } catch (e) { log('pipeline save', e); } };
+const writtenFiles = new Set();
+const within = (child, parent) => { const rel = path.relative(parent, child); return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel)); };
+function allowedDir(dir) { const d = path.resolve(String(dir)); return pipe().dirs.some((x) => within(d, path.resolve(x))); }
+function godotProject(dir) {
+  let d = path.resolve(dir);
+  for (let i = 0; i < 12; i++) {
+    const f = path.join(d, 'project.godot');
+    if (fs.existsSync(f)) {
+      let name = path.basename(d);
+      try { const m = fs.readFileSync(f, 'utf8').match(/^config\/name\s*=\s*"([^"]*)"/m); if (m) name = m[1]; } catch { /* ignore */ }
+      return { root: d, name };
+    }
+    const up = path.dirname(d); if (up === d) break; d = up;
+  }
+  return null;
+}
+ipcMain.handle('pipe:pickDir', async (_e, opts = {}) => {
+  const r = await dialog.showOpenDialog(win, { title: opts.title || 'Choose a folder', defaultPath: opts.defaultPath, properties: ['openDirectory', 'createDirectory'] });
+  if (r.canceled || !r.filePaths[0]) return null;
+  const dir = r.filePaths[0], gp = godotProject(dir);
+  const p = pipe(); const keep = gp ? gp.root : dir;
+  if (!p.dirs.includes(keep)) { p.dirs = [keep, ...p.dirs].slice(0, 40); savePipe(p); }
+  return { dir, godotRoot: gp?.root || null, projectName: gp?.name || null };
+});
+ipcMain.handle('pipe:inspect', (_e, dir) => {
+  const d = path.resolve(String(dir)); const gp = fs.existsSync(d) ? godotProject(d) : null;
+  return { exists: fs.existsSync(d), allowed: allowedDir(d), godotRoot: gp?.root || null, projectName: gp?.name || null };
+});
+const cleanName = (n) => path.basename(String(n)).replace(/[<>:"|?*\x00-\x1f]/g, '_').slice(0, 120) || 'file';
+ipcMain.handle('pipe:write', (_e, dir, sub, files) => {
+  const base = path.resolve(String(dir));
+  if (!allowedDir(base)) throw new Error('Choose this folder again (it was not picked in GLB&ME)');
+  const parts = String(sub || '').split(/[\\/]+/).filter((x) => x && x !== '.' && x !== '..').map(cleanName);
+  const target = path.join(base, ...parts);
+  if (!within(target, base)) throw new Error('bad folder');
+  fs.mkdirSync(target, { recursive: true });
+  const out = [];
+  for (const [name, data] of files) {
+    const f = path.join(target, cleanName(name));
+    const tmp = f + '.tmp'; fs.writeFileSync(tmp, Buffer.from(data)); fs.renameSync(tmp, f);
+    writtenFiles.add(f); out.push(f);
+  }
+  return out;
+});
+ipcMain.handle('pipe:writeTemp', (_e, name, data) => {
+  const d = path.join(app.getPath('userData'), 'exports'); fs.mkdirSync(d, { recursive: true });
+  const f = path.join(d, cleanName(name)); fs.writeFileSync(f, Buffer.from(data)); writtenFiles.add(f); return f;
+});
+function toolCandidates(tool) {
+  const out = [], env = process.env, home = app.getPath('home');
+  const pathDirs = (env.PATH || '').split(path.delimiter).filter(Boolean);
+  const ls = (d) => { try { return fs.readdirSync(d); } catch { return []; } };
+  const byVersion = (a, b) => b.localeCompare(a, undefined, { numeric: true });
+  if (tool === 'blender') {
+    if (process.platform === 'win32') {
+      for (const pf of [env.ProgramFiles || 'C:\\Program Files', env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)']) {
+        const bf = path.join(pf, 'Blender Foundation'); for (const v of ls(bf).sort(byVersion)) out.push(path.join(bf, v, 'blender.exe'));
+        out.push(path.join(pf, 'Steam', 'steamapps', 'common', 'Blender', 'blender.exe'));
+      }
+      pathDirs.forEach((d) => out.push(path.join(d, 'blender.exe')));
+    } else if (isMac) out.push('/Applications/Blender.app/Contents/MacOS/Blender', path.join(home, 'Applications/Blender.app/Contents/MacOS/Blender'), path.join(home, 'Library/Application Support/Steam/steamapps/common/Blender/Blender.app/Contents/MacOS/Blender'));
+    else { pathDirs.forEach((d) => out.push(path.join(d, 'blender'))); out.push('/snap/bin/blender', '/var/lib/flatpak/exports/bin/org.blender.Blender', path.join(home, '.local/share/flatpak/exports/bin/org.blender.Blender')); }
+  } else if (tool === 'godot') {
+    if (process.platform === 'win32') {
+      const wg = path.join(env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Packages');
+      for (const p of ls(wg).filter((x) => /godot/i.test(x))) for (const f of ls(path.join(wg, p)).filter((x) => /^godot.*\.exe$/i.test(x) && !/console/i.test(x)).sort(byVersion)) out.push(path.join(wg, p, f));
+      for (const pf of [env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', env.ProgramFiles || 'C:\\Program Files']) { const s = path.join(pf, 'Steam', 'steamapps', 'common', 'Godot Engine'); for (const f of ls(s).filter((x) => /^godot.*\.exe$/i.test(x) && !/console/i.test(x))) out.push(path.join(s, f)); }
+      pathDirs.forEach((d) => { for (const f of ls(d).filter((x) => /^godot.*\.exe$/i.test(x) && !/console/i.test(x))) out.push(path.join(d, f)); });
+    } else if (isMac) out.push('/Applications/Godot.app/Contents/MacOS/Godot', '/Applications/Godot_mono.app/Contents/MacOS/Godot', path.join(home, 'Applications/Godot.app/Contents/MacOS/Godot'));
+    else { pathDirs.forEach((d) => out.push(path.join(d, 'godot'), path.join(d, 'godot4'))); out.push('/var/lib/flatpak/exports/bin/org.godotengine.Godot', '/snap/bin/godot-4'); }
+  }
+  return out;
+}
+const validTool = (tool, f) => { try { return f && fs.statSync(f).isFile() && new RegExp(tool, 'i').test(path.basename(f) + path.dirname(f)); } catch { return false; } };
+ipcMain.handle('pipe:findTool', (_e, tool) => {
+  if (!['blender', 'godot'].includes(tool)) return null;
+  const saved = pipe().tools[tool]; if (validTool(tool, saved)) return saved;
+  return toolCandidates(tool).find((f) => validTool(tool, f)) || null;
+});
+ipcMain.handle('pipe:pickTool', async (_e, tool) => {
+  if (!['blender', 'godot'].includes(tool)) return null;
+  const r = await dialog.showOpenDialog(win, { title: `Locate ${tool === 'blender' ? 'Blender' : 'Godot'}`, properties: ['openFile', 'treatPackageAsDirectory'], filters: process.platform === 'win32' ? [{ name: 'Programs', extensions: ['exe'] }] : [] });
+  if (r.canceled || !r.filePaths[0]) return null;
+  let f = r.filePaths[0];
+  if (isMac && f.endsWith('.app')) f = path.join(f, 'Contents', 'MacOS', tool === 'blender' ? 'Blender' : 'Godot');
+  if (!validTool(tool, f)) throw new Error(`That doesn’t look like ${tool === 'blender' ? 'Blender' : 'Godot'}`);
+  const p = pipe(); p.tools[tool] = f; savePipe(p); return f;
+});
+const BLENDER_SCRIPT = `# GLB&ME → Blender: imports the model passed after "--" into an empty scene
+import bpy, sys, os
+argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+path = argv[0] if argv else ""
+def run():
+    try:
+        bpy.ops.wm.read_homefile(use_empty=True)
+    except Exception as e:
+        print("GLB&ME: could not reset scene", e)
+    if path and os.path.exists(path):
+        try:  # "Unitless" lights look like they did in GLB&ME (physical candela import is very dim)
+            bpy.ops.import_scene.gltf(filepath=path, export_import_convert_lighting_mode="COMPAT")
+        except TypeError:
+            bpy.ops.import_scene.gltf(filepath=path)
+        try:
+            for window in bpy.context.window_manager.windows:
+                for area in window.screen.areas:
+                    if area.type == "VIEW_3D":
+                        for region in area.regions:
+                            if region.type == "WINDOW":
+                                with bpy.context.temp_override(window=window, area=area, region=region):
+                                    bpy.ops.view3d.view_all()
+        except Exception as e:
+            print("GLB&ME: could not frame view", e)
+    return None
+bpy.app.timers.register(run, first_interval=0.5)
+`;
+ipcMain.handle('pipe:launch', (_e, tool, target) => {
+  const exe = ['blender', 'godot'].includes(tool) ? (pipe().tools[tool] && validTool(tool, pipe().tools[tool]) ? pipe().tools[tool] : toolCandidates(tool).find((f) => validTool(tool, f))) : null;
+  if (!exe) throw new Error(`${tool} not found`);
+  const t = path.resolve(String(target));
+  let args;
+  if (tool === 'blender') {
+    if (!writtenFiles.has(t)) throw new Error('not allowed');
+    const sd = path.join(app.getPath('userData'), 'scripts'); fs.mkdirSync(sd, { recursive: true });
+    const script = path.join(sd, 'glbme_blender_import.py'); fs.writeFileSync(script, BLENDER_SCRIPT);
+    args = ['--python', script, '--', t];
+  } else {
+    if (!allowedDir(t) || !fs.existsSync(path.join(t, 'project.godot'))) throw new Error('not a Godot project');
+    args = ['--editor', '--path', t];
+  }
+  const { spawn } = require('child_process');
+  const child = spawn(exe, args, { detached: true, stdio: 'ignore', cwd: path.dirname(exe) });
+  child.on('error', (e) => log('launch', tool, e));
+  child.unref();
+  log('launched', tool, exe);
+  return true;
 });

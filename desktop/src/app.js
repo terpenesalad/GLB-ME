@@ -6,7 +6,7 @@ import { templateList } from './editor/studios.js';
 import { bytes } from './editor/studios.js';
 
 const SETTINGS_KEY = 'glbandme.settings';
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 
 class App {
   constructor() {
@@ -30,9 +30,14 @@ class App {
   }
   saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings)); } catch { /* private mode */ } this.applySettings(); }
   applySettings() {
-    const c = document.documentElement.classList, s = this.settings;
+    const root = document.documentElement, c = root.classList, s = this.settings;
     c.toggle('reduce-motion', s.reduceMotion ?? matchMedia('(prefers-reduced-motion: reduce)').matches);
+    c.toggle('reduce-transparency', s.reduceTransparency ?? matchMedia('(prefers-reduced-transparency: reduce)').matches);
     c.toggle('large-ui', s.uiSize === 'large'); c.toggle('xlarge-ui', s.uiSize === 'xlarge');
+    const theme = s.theme === 'system' || !s.theme ? (matchMedia('(prefers-contrast: more)').matches ? 'contrast' : 'dark') : s.theme;
+    if (theme === 'dark') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', theme);
+    c.toggle('big-focus', !!s.bigFocus || theme === 'contrast');
+    if (this.editor?.vp) this.editor.vp.setAxisColors(s.axisColors || 'standard');
   }
   showDrop(on) { this.drop.style.display = on ? 'flex' : 'none'; }
 
@@ -45,15 +50,15 @@ class App {
     const create = (cls, ic, title, sub, fn, grad) => h('button', { class: 'create ' + cls, style: { background: grad }, onclick: fn }, icon(ic), h('div', null, h('b', null, title), h('br'), h('span', null, sub)));
     const home = h('div', { class: 'home' },
       h('div', { class: 'titlebar' + (plat === 'darwin' ? ' mac' : plat ? ' win' : '') }, h('div', { class: 'brand' }, h('div', { class: 'logo' }), 'GLB&ME'), h('div', { class: 'spacer' }),
-        ibtn('keyboard', 'Shortcuts', () => import('./editor/studios.js').then((s) => s.shortcutsDialog())), ibtn('settings', 'Settings', () => this.settingsDialog())),
+        ibtn('keyboard', ['Shortcuts', '?'], () => import('./editor/studios.js').then((s) => s.shortcutsDialog())), ibtn('settings', ['Settings', 'Ctrl+,'], () => this.settingsDialog())),
       h('div', { class: 'content' },
         h('h1', null, 'Create in 3D'),
-        h('p', { class: 'lead' }, 'Sculpt, paint, texture, animate and export GLB models – on your PC.'),
+        h('p', { class: 'lead' }, 'Model, sculpt, paint, animate – and send it straight to Godot, Blender or the web.'),
         h('div', { class: 'create-row' },
           create('', 'plus', 'New project', 'Start from an empty scene', () => this.newProject(), 'linear-gradient(135deg,#6e56f7,#9b5cf6)'),
           create('', 'brush', 'Sculpt', 'Clay ball, ready for brushes', () => this.newProject('Sculpt', 'sculpt'), 'linear-gradient(135deg,#0ea5a4,#22c55e)'),
           create('', 'layout-template', 'Templates', '20 ready-made models', () => this.templates(), 'linear-gradient(135deg,#f97316,#f43f5e)'),
-          create('', 'download', 'Import', 'GLB, glTF, OBJ, STL, PLY, FBX', () => this.importNew(), 'linear-gradient(135deg,#3b82f6,#06b6d4)')),
+          create('', 'download', 'Import', 'GLB, glTF, OBJ, FBX, DAE, 3MF, STL, PLY', () => this.importNew(), 'linear-gradient(135deg,#3b82f6,#06b6d4)')),
         h('div', { class: 'quick', style: { marginTop: '14px' } }, h('span', { class: 'muted', style: { alignSelf: 'center', marginRight: '4px' } }, 'Quick start:'),
           ...[['type', '3D text', 'text'], ['box', 'Cube', 'shape:CUBE'], ['square', 'Rounded box', 'shape:ROUNDED_BOX'], ['circle', 'Sphere', 'shape:SPHERE'], ['torus', 'Torus', 'shape:TORUS'], ['mountain', 'Terrain', 'shape:TERRAIN'], ['star', 'Star', 'shape:STAR']].map(([ic, l, k]) => h('button', { class: 'chip', onclick: () => this.newProject(l, k) }, icon(ic), l))),
         h('div', { class: 'proj-head' }, h('h2', null, 'Your projects'), search,
@@ -126,7 +131,7 @@ class App {
   async importNew(files = null) {
     if (!files) files = await platform.files.open({ multi: true, filters: MODEL_FILTERS });
     if (!files?.length) return;
-    const models = files.filter((f) => /\.(glb|gltf|obj|stl|ply|fbx)$/i.test(f.name));
+    const models = files.filter((f) => /\.(glb|gltf|obj|stl|ply|fbx|dae|3mf)$/i.test(f.name));
     if (!models.length) { toast('Drop a 3D model (GLB, glTF, OBJ, STL, PLY or FBX)'); return; }
     const name = models[0].name.replace(/\.[^.]+$/, '');
     const p = await platform.projects.create({ name: this.uniqueProjectName(name) });
@@ -179,19 +184,34 @@ class App {
   // ===================================================================== settings / welcome
   settingsDialog() {
     const s = this.settings;
+    const toolRow = (tool, label) => {
+      const val = h('span', { class: 'v muted', style: { maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, 'Checking…');
+      platform.pipeline?.findTool(tool).then((p) => { val.textContent = p || 'Not found'; val.title = p || ''; }).catch(() => { val.textContent = 'Not found'; });
+      return h('div', { class: 'navrow' }, icon(tool === 'blender' ? 'send' : 'gamepad-2'), label, val, btn('Locate…', async () => { try { const p = await platform.pipeline.pickTool(tool); if (p) { val.textContent = p; toast(label + ' set'); } } catch (e) { toast(e.message, 4000); } }, 'ghost'));
+    };
     const body = h('div', null,
+      section('Appearance'),
+      h('div', { class: 'label', style: { marginBottom: '6px' } }, 'Theme'),
+      seg([['dark', 'Dark'], ['light', 'Light'], ['contrast', 'High contrast'], ['system', 'Automatic']], s.theme || 'dark', (v) => { s.theme = v; this.saveSettings(); }, '', 'Theme'),
+      h('div', { class: 'label', style: { margin: '12px 0 6px' } }, 'Interface size'),
+      seg([['default', 'Default'], ['large', 'Large'], ['xlarge', 'Extra large']], s.uiSize || 'default', (v) => { s.uiSize = v; this.saveSettings(); }, '', 'Interface size'),
+      h('div', { class: 'label', style: { margin: '12px 0 6px' } }, 'Axis colours (gizmo, grid, navigation)'),
+      seg([['standard', 'Red · green · blue'], ['cvd', 'Colour-blind safe']], s.axisColors || 'standard', (v) => { s.axisColors = v; this.saveSettings(); }, '', 'Axis colours'),
       section('Accessibility'),
-      h('div', { class: 'label', style: { marginBottom: '6px' } }, 'Interface size'),
-      seg([['default', 'Default'], ['large', 'Large'], ['xlarge', 'Extra large']], s.uiSize || 'default', (v) => { s.uiSize = v; this.saveSettings(); }),
       toggle('Reduce motion', !!(s.reduceMotion ?? matchMedia('(prefers-reduced-motion: reduce)').matches), (v) => { s.reduceMotion = v; this.saveSettings(); }, 'No camera fly-throughs or animated panels'),
+      toggle('Reduce transparency', !!(s.reduceTransparency ?? false), (v) => { s.reduceTransparency = v; this.saveSettings(); }, 'Solid panels instead of frosted glass'),
+      toggle('Bold focus outlines', !!s.bigFocus, (v) => { s.bigFocus = v; this.saveSettings(); }, 'Easier to see where the keyboard is'),
       toggle('Show tips', s.tips !== false, (v) => { s.tips = v; this.saveSettings(); }, 'Helpful hints while you work'),
+      h('p', { class: 'muted' }, 'Everything works from the keyboard: Ctrl+K searches every command, Alt or F10 opens the menu bar, arrow keys move objects and navigate the layers list, and every control has a screen-reader label.'),
       section('Performance'),
       h('div', { class: 'label', style: { marginBottom: '6px' } }, 'Viewport sharpness'),
-      seg([['1', 'Fast'], ['1.5', 'Balanced'], ['2', 'Sharpest']], String(s.pixelRatio || 2), (v) => { s.pixelRatio = +v; this.saveSettings(); if (this.editor) { this.editor.vp.renderer.setPixelRatio(Math.min(+v, devicePixelRatio)); this.editor.vp.resize(); } }),
+      seg([['1', 'Fast'], ['1.5', 'Balanced'], ['2', 'Sharpest']], String(s.pixelRatio || 2), (v) => { s.pixelRatio = +v; this.saveSettings(); if (this.editor) { this.editor.vp.renderer.setPixelRatio(Math.min(+v, devicePixelRatio)); this.editor.vp.resize(); } }, '', 'Viewport sharpness'),
+      isDesktop && section('Other apps'),
+      isDesktop && h('div', { class: 'card' }, toolRow('blender', 'Blender'), toolRow('godot', 'Godot')),
       section('About'),
       h('div', { class: 'card' }, h('div', { class: 'navrow' }, h('b', null, 'GLB&ME'), h('span', { class: 'v' }, 'Version ' + VERSION)),
-        h('div', { class: 'navrow', role: 'button', tabindex: '0', onclick: () => platform.app.openExternal('https://github.com/terpenesalad/GLB-ME') }, icon('github'), 'Source & releases', h('span', { class: 'v' }, icon('external-link'))),
-        h('div', { class: 'navrow', role: 'button', tabindex: '0', onclick: () => { s.seenEditorHint = false; s.welcomed = false; this.saveSettings(); toast('Tips will show again'); } }, icon('rotate-ccw'), 'Show tips & welcome again')),
+        h('div', { class: 'navrow', role: 'button', tabindex: '0', onclick: () => platform.app.openExternal('https://github.com/terpenesalad/GLB-ME'), onkeydown: (e) => { if (e.key === 'Enter') e.currentTarget.click(); } }, icon('github'), 'Source & releases', h('span', { class: 'v' }, icon('external-link'))),
+        h('div', { class: 'navrow', role: 'button', tabindex: '0', onclick: () => { s.seenEditorHint = false; s.seenPaintHint = false; s.seenFaceHint = false; s.welcomed = false; this.saveSettings(); toast('Tips will show again'); }, onkeydown: (e) => { if (e.key === 'Enter') e.currentTarget.click(); } }, icon('rotate-ccw'), 'Show tips & welcome again')),
       h('p', { class: 'muted' }, 'Projects are stored on this PC and saved automatically. Every project is a standard .glb file, so you can move it to the Android app and back.'),
     );
     modal({ title: 'Settings', icon: 'settings', body });
@@ -201,11 +221,12 @@ class App {
     const m = modal({
       title: 'Welcome to GLB&ME', icon: 'sparkles',
       body: h('div', null,
-        f('shapes', 'Make anything', '25 shapes, 3D text with any font, draw-to-3D, templates and imports.'),
-        f('brush', 'Sculpt & paint', 'Nomad-style clay brushes with symmetry and masking, plus vertex paint.'),
-        f('image', 'Materials & textures', 'Metals, glass and glow, 18 seamless patterns, photos, stickers – per part or the whole model.'),
-        f('clapperboard', 'Animate & light', 'Keyframes, one-click presets and real lights.'),
-        f('share', 'Export like a pro', 'GLB, glTF, USDZ, OBJ, STL, PLY with presets for games, web, AR and 3D printing.')),
+        f('shapes', 'Model like a pro', '25 shapes, booleans, push/pull faces, groups, arrays, align, 3D text with any font and draw-to-3D.'),
+        f('paintbrush', 'Sculpt & paint', 'Clay brushes with symmetry, and painting straight onto textures – brushes, straight lines and a full colour wheel.'),
+        f('image', 'Real materials', 'Metal, glass, car paint, velvet and every PBR texture map – shared between objects if you like.'),
+        f('clapperboard', 'Animate & light', 'Keyframes with easing, named clips, lights and cameras.'),
+        f('gamepad-2', 'Straight into Godot & Blender', 'Send to Godot with collision and a live link that updates on every save, or open in Blender in one click.'),
+        f('keyboard', 'Made for everyone', 'Ctrl+K finds any command, full keyboard control, screen-reader labels, light and high-contrast themes.')),
       footer: [btn('Get started', () => m.close(), 'primary lg')],
       onClose: () => { this.settings.welcomed = true; this.saveSettings(); },
     });

@@ -1,7 +1,7 @@
 {
   "name": "glbandme-desktop",
   "productName": "GLB&ME",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Create, sculpt, paint, animate and export GLB models",
   "main": "main/main.js",
   "author": {
@@ -34,6 +34,7 @@
     "opentype.js": "^1.3.4",
     "playwright-core": "^1.48.2",
     "three": "^0.170.0",
+    "three-bvh-csg": "^0.0.17",
     "three-mesh-bvh": "^0.8.3"
   },
   "homepage": "https://github.com/terpenesalad/GLB-ME",
@@ -50,7 +51,7 @@
     "appId": "app.glbandme.desktop",
     "productName": "GLB&ME",
     "artifactName": "GLB-ME-${version}-${os}-${arch}.${ext}",
-    "copyright": "Copyright \u00a9 2026 GLB&ME",
+    "copyright": "Copyright © 2026 GLB&ME",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -95,6 +96,16 @@
       {
         "ext": "fbx",
         "name": "FBX model",
+        "role": "Viewer"
+      },
+      {
+        "ext": "dae",
+        "name": "Collada model",
+        "role": "Viewer"
+      },
+      {
+        "ext": "3mf",
+        "name": "3MF model",
         "role": "Viewer"
       }
     ],

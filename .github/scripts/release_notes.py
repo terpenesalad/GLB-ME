@@ -8,11 +8,14 @@ if start < 0:
 nxt = re.search(r'\n## GLB&ME ', s[start + 5:])
 sec = s[start:start + 5 + nxt.start()] if nxt else s[start:]
 head, rest = sec.split('\n', 1)
+import os
+android = open('version.txt').read().strip() if os.path.exists('version.txt') else ver
+apk = f"`GLB-ME-{ver}.apk`" if android == ver else f"`GLB-ME-{android}.apk` – from [v{android}](https://github.com/terpenesalad/GLB-ME/releases/tag/v{android})"
 dl = f"""
 ### Downloads
 | Device | File |
 |---|---|
-| Android 8.0+ | `GLB-ME-{ver}.apk` |
+| Android 8.0+ | {apk} |
 | **Windows 10/11** | **`GLB-ME-Setup-{ver}.exe`** (installer) or `GLB-ME-{ver}-portable.exe` (no install needed) |
 | macOS (Intel & Apple silicon) | `GLB-ME-{ver}-mac.dmg` |
 | Linux | `GLB-ME-{ver}-linux-x86_64.AppImage` or `GLB-ME-{ver}-linux-amd64.deb` |

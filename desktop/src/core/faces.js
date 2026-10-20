@@ -54,6 +54,52 @@ export class FaceSelection {
     this.version++;
   }
 
+  /**
+   * Flat region under a clicked triangle: all connected triangles lying in the same plane
+   * (within `angleDeg`). This is the "face" a CAD tool would pick for push/pull.
+   */
+  selectCoplanar(t0, value = 1, angleDeg = 2) {
+    const g = this.geo; if (!g || t0 == null || t0 < 0 || t0 >= this.sel.length) return 0;
+    const w = weldInfo(g), idx = g.index.array, p = g.attributes.position.array, tc = this.sel.length;
+    const nrm = (t, out) => {
+      const a = idx[t * 3] * 3, b = idx[t * 3 + 1] * 3, c = idx[t * 3 + 2] * 3;
+      const e1x = p[b] - p[a], e1y = p[b + 1] - p[a + 1], e1z = p[b + 2] - p[a + 2], e2x = p[c] - p[a], e2y = p[c + 1] - p[a + 1], e2z = p[c + 2] - p[a + 2];
+      const x = e1y * e2z - e1z * e2y, y = e1z * e2x - e1x * e2z, z = e1x * e2y - e1y * e2x, l = Math.hypot(x, y, z) || 1;
+      out[0] = x / l; out[1] = y / l; out[2] = z / l; return out;
+    };
+    // welded edge → triangles
+    if (!this._edgeTris || this._edgeGeo !== g || this._edgeTopo !== this.topo) {
+      const m = new Map();
+      for (let t = 0; t < tc; t++) for (let k = 0; k < 3; k++) {
+        const ra = w.rep[idx[t * 3 + k]], rb = w.rep[idx[t * 3 + (k + 1) % 3]];
+        const key = ra < rb ? ra * 4294967296 + rb : rb * 4294967296 + ra;
+        const l = m.get(key); if (l) l.push(t); else m.set(key, [t]);
+      }
+      this._edgeTris = m; this._edgeGeo = g; this._edgeTopo = this.topo;
+    }
+    const n0 = nrm(t0, [0, 0, 0]), a0 = idx[t0 * 3] * 3, d0 = n0[0] * p[a0] + n0[1] * p[a0 + 1] + n0[2] * p[a0 + 2];
+    const box = g.boundingBox || (g.computeBoundingBox(), g.boundingBox);
+    const eps = Math.max(1e-6, box.min.distanceTo(box.max) * 1e-4), cos = Math.cos(angleDeg * Math.PI / 180), n = [0, 0, 0];
+    const seen = new Uint8Array(tc), q = [t0]; seen[t0] = 1; let count = 0;
+    while (q.length) {
+      const t = q.pop();
+      this.sel[t] = value; count++;
+      for (let k = 0; k < 3; k++) {
+        const ra = w.rep[idx[t * 3 + k]], rb = w.rep[idx[t * 3 + (k + 1) % 3]];
+        for (const u of this._edgeTris.get(ra < rb ? ra * 4294967296 + rb : rb * 4294967296 + ra) || []) {
+          if (seen[u]) continue; seen[u] = 1;
+          nrm(u, n);
+          if (n[0] * n0[0] + n[1] * n0[1] + n[2] * n0[2] < cos) continue;
+          const b = idx[u * 3] * 3;
+          if (Math.abs(n0[0] * p[b] + n0[1] * p[b + 1] + n0[2] * p[b + 2] - d0) > eps) continue;
+          q.push(u);
+        }
+      }
+    }
+    this.version++;
+    return count;
+  }
+
   selectedVertices() {
     const g = this.geo; if (!g) return [];
     const w = weldInfo(g), idx = g.index.array, mark = new Uint8Array(w.rep.length);
