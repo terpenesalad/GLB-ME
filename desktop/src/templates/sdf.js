@@ -46,6 +46,19 @@ export const P = {
       return (Math.sqrt(x2 * a2 * il2) + yy * rr) * il2 - ra;
     } };
   },
+  /** Faceted rock: a smoothed intersection of random half-spaces around c (size s = [x, y, z]). */
+  rock(c, s, col, o = {}) {
+    let r = (o.seed ?? 1) * 7919 + 13; const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647);
+    const planes = []; const n = o.facets ?? 14;
+    for (let i = 0; i < n; i++) { const u = rnd() * 2 - 1, a = rnd() * Math.PI * 2, q = Math.sqrt(1 - u * u); const nx = q * Math.cos(a), ny = u * 0.8 - 0.1, nz = q * Math.sin(a); const l = Math.hypot(nx, ny, nz); planes.push([nx / l, ny / l, nz / l, 0.75 + rnd() * 0.25]); }
+    planes.push([0, -1, 0, 0.45]);
+    const k = o.round ?? 0.08;
+    return { c: col, k: o.k ?? 0.05, sub: o.sub, b: [c, Math.max(...s)], d(x, y, z) {
+      const px = (x - c[0]) / s[0], py = (y - c[1]) / s[1], pz = (z - c[2]) / s[2];
+      let d = -1e9; for (const [nx, ny, nz, off] of planes) { const v = nx * px + ny * py + nz * pz - off; d = d < -1e8 ? v : -smin(-d, -v, k); }
+      return d * Math.min(s[0], s[1], s[2]);
+    } };
+  },
   box(c, s, r, col, o = {}) {
     const m = rotM(o.rot);
     return { c: col, k: o.k ?? 0.03, sub: o.sub, b: [c, len(s[0], s[1], s[2]) / 2], d(x, y, z) {

@@ -1,7 +1,7 @@
 {
   "name": "glbandme-desktop",
   "productName": "GLB&ME",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Create, sculpt, paint, animate and export GLB models",
   "main": "main/main.js",
   "author": {

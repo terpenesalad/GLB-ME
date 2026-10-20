@@ -108,6 +108,25 @@ export function csg(base, tools, op = 'sub') {
   for (const t of [tools].flat()) { const r = ev.evaluate(acc, prep(t), OP); acc = new Brush(r.geometry); acc.updateMatrixWorld(); }
   return acc.geometry;
 }
+/** Keeps the part of a mesh between heights y0 and y1 (triangles are clipped, no caps) – fast band splitting. */
+export function clipY(geo, y0, y1) {
+  const g = geo.index ? geo.toNonIndexed() : geo, P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv;
+  const out = { p: [], n: [], u: [] };
+  const vert = (i) => ({ p: [P.getX(i), P.getY(i), P.getZ(i)], n: N ? [N.getX(i), N.getY(i), N.getZ(i)] : [0, 1, 0], u: U ? [U.getX(i), U.getY(i)] : [0, 0] });
+  const lerp = (a, b, t) => ({ p: a.p.map((v, k) => v + (b.p[k] - v) * t), n: a.n.map((v, k) => v + (b.n[k] - v) * t), u: a.u.map((v, k) => v + (b.u[k] - v) * t) });
+  const clip = (poly, keep, edge) => { const res = []; for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length], ia = keep(a), ib = keep(b); if (ia) res.push(a); if (ia !== ib) res.push(lerp(a, b, (edge - a.p[1]) / (b.p[1] - a.p[1]))); } return res; };
+  for (let i = 0; i < P.count; i += 3) {
+    let poly = [vert(i), vert(i + 1), vert(i + 2)];
+    const ys = poly.map((v) => v.p[1]);
+    if (Math.max(...ys) <= y0 || Math.min(...ys) >= y1) continue;
+    poly = clip(poly, (v) => v.p[1] >= y0, y0); if (poly.length < 3) continue;
+    poly = clip(poly, (v) => v.p[1] <= y1, y1); if (poly.length < 3) continue;
+    for (let k = 1; k < poly.length - 1; k++) for (const v of [poly[0], poly[k], poly[k + 1]]) { out.p.push(...v.p); out.n.push(...v.n); out.u.push(...v.u); }
+  }
+  const r = new THREE.BufferGeometry();
+  r.setAttribute('position', new THREE.Float32BufferAttribute(out.p, 3)); r.setAttribute('normal', new THREE.Float32BufferAttribute(out.n, 3)); r.setAttribute('uv', new THREE.Float32BufferAttribute(out.u, 2));
+  return r;
+}
 /** Rounded-rectangle plan (x along length, z across) extruded vertically from y0 to y1. */
 export function planShape(L, W, r) {
   const s = new THREE.Shape(), hl = L / 2, hw = W / 2, [ra, rb] = (Array.isArray(r) ? r : [r, r]).map((v) => Math.max(0.001, Math.min(v, hw - 1e-3, hl - 1e-3)));
@@ -352,10 +371,10 @@ export class Kit {
   /** Door/window style open–close animation: keys on each object (closed → open → closed) and two clips. */
   openClose(objs, apply, { frames = 30 } = {}) {
     for (const o of objs) {
-      const p = o.position.clone(), q = o.quaternion.clone();
+      const p = o.position.clone(), q = o.quaternion.clone(), sc = o.scale.clone();
       this.key(o, 0, null, 'ease');
       apply(o, 1); this.key(o, frames, null, 'ease');
-      o.position.copy(p); o.quaternion.copy(q); this.key(o, frames * 2, null, 'ease');
+      o.position.copy(p); o.quaternion.copy(q); o.scale.copy(sc); this.key(o, frames * 2, null, 'ease');
     }
     this.clips = [{ name: 'Open', start: 0, end: frames, loop: false }, { name: 'Close', start: frames, end: frames * 2, loop: false }];
     this.frameCount = frames * 2;

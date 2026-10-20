@@ -1,3 +1,31 @@
+## GLB&ME 1.3.0 – Asset library: Melbourne, trams, rooms, animals and more
+
+The PC app (Windows, macOS, Linux) gets a library of **144 new procedural templates** built to game-asset quality – every one made of separate, named, editable parts with real-world sizes, PBR materials and clean hierarchies, ready to export to Godot, Blender, Unity or Unreal. The Android app stays on 1.1.0.
+
+### Melbourne
+- **Victorian terraces**: Fitzroy (Hawthorn brick with cream bands), Carlton boom-style two-storey with a lace balcony, and a Collingwood red-brick worker’s terrace – striped bullnose verandahs with real corrugations, cast-iron lace friezes and brackets, balustraded parapets with urns and name plates, tessellated tile paths, palisade fences.
+- **Weatherboard cottages** (two colourways), an **Italianate villa** with a canted bay and slate roof, a **Federation villa** with half-timbered gable and terracotta roof, a **corner pub**, a **Victorian shop row**, a **bluestone bond store** and a **bluestone laneway** with murals and festoon lights.
+
+### Trams & roads
+- **W-class** (green & cream) and **City Circle** trams with drop-centre doorways, timber interiors and trolley poles; an **1880s cable tram** (grip car + trailer); modern **Z3**, articulated **B2** and three-section **E-class** with pantographs and LED destination displays.
+- **Grooved tram track** pieces (straight, 90° curve, crossing, single, 1435 mm gauge), a **CBD street** with tram lanes and overhead wiring, a **signalised intersection** with hook-turn signs, residential and arterial roads, a **platform stop**, overhead poles, traffic lights and the hook-turn sign.
+
+### Rooms, building kit, windows & doors
+- Furnished **living room, bedroom, kitchen, bathroom and study**, plus empty, L-shaped, bay-window, round, hallway and attic rooms (ceilings included, hidden for easy viewing; pendant lights with real light sources).
+- A **modular building kit** on a 2 m grid: walls with door / window / arch openings, corner piers, floors, stairs, columns and balustrades.
+- **18 windows & doors**: Victorian, arched and round-headed sashes, Georgian 6-over-6, casements, aluminium, a canted bay, porthole, shopfront, front door with leadlight fanlight and sidelights, panel, flush, French, glazed and ledged doors, sliding, roller and sectional garage doors – most with **Open / Close animation clips**.
+
+### Furniture, props, animals and nature
+- **21 furniture pieces** (sofa, armchair, dining set, bed, wardrobe, bookcase with books, desk, kitchen run, fridge, clawfoot bath, toilet, vanity, Victorian marble fireplace, lamps, plants, rug…) and **16 street props** (heritage lamp, bench, bins, bollards, bike hoops, post box, signs, picnic table, fountain, shelters, cone, hydrant, planter, café setting).
+- **21 animals**: dog, cat, horse, cow, sheep, pig, chicken, duck, rabbit, fox, deer, bear and Australian natives – kangaroo, koala, wombat, emu, kookaburra, magpie, platypus, echidna and brushtail possum.
+- **13 nature assets**: river red gum, London plane, oak, Canary Island palm, tree fern, conifer, shrub, clipped hedge, grass, flower bed, rocks, boulder and log – with alpha-cut foliage and bark textures.
+
+### Better looking everywhere
+- **PBR material library** (35 materials: Hawthorn, cream and red brick, bluestone, sandstone, render, weatherboard, corrugated iron, slate, terracotta, timber floors, asphalt, concrete, tessellated and ceramic tiles, grass, gravel, marble, fabric, leather and more) – apply any of them to your own models from the Material panel; textures tile at real-world size.
+- **Real HDR lighting**: photo studio, daylight, city street, forest, apartment, golden hour and dawn panoramas, with an optional blurred panorama background.
+- **Ambient occlusion** in the viewport and in renders for soft contact shadows.
+- The template browser now has **search** and category filters.
+
 ## GLB&ME 1.2.0 – Pro desktop editor
 
 A big update for the PC app (Windows, macOS, Linux). The Android app stays on 1.1.0 and opens projects made with 1.2.0.

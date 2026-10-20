@@ -4,8 +4,8 @@ import * as THREE from 'three';
 import { Noise } from './pbr.js';
 
 const canvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
-const tex = (c, srgb = true, name = 'Texture', wrap = true) => {
-  const t = new THREE.CanvasTexture(c); t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.name = name; t.anisotropy = 8;
+const tex = (c, srgb = true, name = 'Texture', wrap = true, alpha = false) => {
+  const t = new THREE.CanvasTexture(c); t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.name = name; t.anisotropy = 8; t.userData.mimeType = alpha ? 'image/png' : 'image/jpeg';
   if (wrap) t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
 };
@@ -95,7 +95,7 @@ export function laceTexture(style = 'frieze') {
     }
     const n = normalFromAlpha(c, 5, 5);
     shadeCutout(c);
-    const map = tex(c, true, 'Iron lace ' + style), normalMap = tex(n, false, 'Iron lace ' + style + ' normal');
+    const map = tex(c, true, 'Iron lace ' + style, true, true), normalMap = tex(n, false, 'Iron lace ' + style + ' normal');
     if (style === 'bracket') for (const t of [map, normalMap]) t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
     return { map, normalMap };
   });
@@ -208,7 +208,7 @@ export function leafTexture(kind = 'round', { bg = null } = {}) {
     }
     // dapple
     const img = x.getImageData(0, 0, S, S); for (let i = 0; i < S * S; i++) { if (!img.data[i * 4 + 3]) continue; const v = 0.85 + nz.fbm((i % S) / S, Math.floor(i / S) / S, 8, 3) * 0.3; img.data[i * 4] *= v; img.data[i * 4 + 1] *= v; img.data[i * 4 + 2] *= v; } x.putImageData(img, 0, 0);
-    const t = tex(c, true, 'Leaves ' + kind, !!bg);
+    const t = tex(c, true, 'Leaves ' + kind, !!bg, !bg);
     return { map: t };
   });
 }

@@ -14,6 +14,7 @@ import { PAINT_SIZES } from './texpaint.js';
 import { COLLISION_TYPES } from './io.js';
 import { platform, IMAGE_FILTERS } from '../platform.js';
 import * as S from './studios.js';
+import { libraryList, textureSet, LIB } from '../templates/matlib.js';
 
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 const D = THREE.MathUtils;
@@ -397,6 +398,11 @@ function materialPanel(ed, o) {
     users > 1 ? ibtn('copy-plus', 'Make unique (stop sharing)', () => a.makeUnique(o)) : null));
   if (users > 1) out.push(h('p', { class: 'muted' }, `Shared by ${users} objects – changes apply to all of them, and it exports as one material.`));
   out.push(section('Look'), h('div', { class: 'tile-grid', style: { gridTemplateColumns: 'repeat(4, 1fr)' } }, MAT_PRESETS.map((p) => h('button', { class: 'tile', style: { height: '62px' }, onclick: () => a.material('Material: ' + p.label, (mm) => applyMatPreset(mm, p), o) }, presetPreview(p), p.label))));
+  out.push(section('Material library'), h('div', { class: 'libgrid', role: 'list', 'aria-label': 'PBR material library' }, libraryList().map((L) => h('button', { class: 'libsw' + (u.maps?.lib === L.id ? ' ring' : ''), role: 'listitem', tip: L.label, 'aria-label': 'Apply ' + L.label, onclick: async () => {
+    const set = await textureSet(L.id); o.geometry.computeBoundingBox(); const sz = o.geometry.boundingBox.getSize(new THREE.Vector3()).multiply(o.getWorldScale(new THREE.Vector3()));
+    const span = Math.max(0.05, Math.max(sz.x, sz.y, sz.z));
+    a.material('Material: ' + L.label, (mm) => applyLibrary(mm, L.id, set, span), o); renderInspector(ed);
+  } }, h('img', { src: `materials/${L.id}_c.webp`, alt: '', loading: 'lazy', onerror: (e) => { e.target.style.display = 'none'; } })))));
   out.push(section('Base colour'), h('div', { class: 'swatches' },
     PALETTE.map((c) => h('button', { class: 'swatch' + (m.color.getHex() === c ? ' ring' : ''), style: { background: hex(c) }, 'aria-label': 'Colour ' + hex(c), onclick: () => a.material('Colour', (mm) => mm.color.setHex(c), o) })),
     (() => { const L = live(ed, 'Colour', [o], (v) => m.color.set(v)); return colorSwatch('#' + m.color.getHexString(), L.onInput, L.onCommit, 'Custom colour'); })()));
@@ -747,3 +753,13 @@ function miniSlider(label, value, min, max, onInput, fmtv) {
   return h('div', { class: 'mini' }, h('span', null, label, val), inp);
 }
 export { fmt, previewCanvas };
+
+/** Applies a library PBR material (colour/normal/roughness maps, real-world tiling across the object). */
+function applyLibrary(m, id, set, span) {
+  const L = LIB[id];
+  for (const k of ['map', 'normalMap', 'roughnessMap']) { m[k] = set[k].clone(); m[k].needsUpdate = true; }
+  m.color.set(L.color ?? 0xffffff); m.roughness = 1; m.metalness = L.metal ?? 0;
+  const t = Math.max(1, Math.round(span / L.tile[0] * 10) / 10);
+  m.userData.tiling = [t, t]; m.userData.maps = { kind: 'image', name: L.label, lib: id };
+  syncTextures(m); m.needsUpdate = true;
+}

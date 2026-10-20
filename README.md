@@ -14,7 +14,7 @@ The PC app (in [`desktop/`](desktop)) is a full desktop 3D editor in the spirit 
 - **Groups & hierarchy**, multi-select with box select, **booleans** (union / subtract / intersect), **push/pull faces**, align & distribute, arrays, snapping, measure tool, units, cameras and empties, custom properties (glTF extras).
 - **Texture painting** with straight lines, eraser and eyedropper, automatic **smart UV unwrap**, and a full **colour wheel** throughout the app.
 - Physically based materials (clearcoat, glass transmission + IOR, sheen, iridescence), every PBR texture map, shared materials.
-- Sculpting, vertex paint, 3D text with your PC's fonts, draw-to-3D, 20 templates, lights, keyframes with easing.
+- Sculpting, vertex paint, 3D text with your PC's fonts, draw-to-3D, 160+ templates, lights, keyframes with easing.
 - Export **GLB, glTF, glTF + files, USDZ, OBJ + MTL, STL, PLY, PNG renders**; import GLB/glTF, OBJ, FBX, Collada, 3MF, STL and PLY with their hierarchy.
 - **Accessible**: menu bar and Ctrl+K command palette, full keyboard control, screen-reader labels, light / high-contrast themes, colour-blind-safe axis colours.
 - **Projects move freely between phone and PC**: every project is a standard `.glb` with the editing data inside.
@@ -38,7 +38,8 @@ Build it yourself: `cd desktop && npm ci && npm run dist` (installers land in `d
 - **Draw → 3D**: finger-draw an outline and **extrude** it, **revolve** it (vases, bottles, chess pieces) or sweep a **tube** along it.
 - **Lights**: point, spot and sun (`KHR_lights_punctual`).
 - Image planes, **stickers / decals** that wrap around curved surfaces, model import and template parts.
-- **20 templates**: head and character bases, an animated robot, a snowman, tree, rock, mushroom, crystals, island diorama, a planet with rings, a product stage, house, chess pawn, vase, mug, donut, sword, a spinning coin and a treasure chest.
+- **164 templates** with search: Melbourne terraces, cottages, villas, pubs, shops, warehouses and laneways; W-class, City Circle, cable, Z3, B2 and E-class trams; tram tracks, roads, intersections and stops; furnished rooms and a modular building kit; windows and doors (animated); furniture; street props; 21 animals including Australian natives; trees and plants – plus the original 20 starters.
+- **PBR material library** (35 real-world materials), **HDR environment lighting** and **ambient occlusion**.
 - Arrays (line and circle), mirror copies on any axis, and numeric size fields in m, cm, mm or in.
 
 ### Sculpt (Nomad-style)
@@ -110,3 +111,6 @@ Signing uses the repository secrets `RELEASE_KEYSTORE_BASE64`, `RELEASE_KEYSTORE
 
 ## License
 MIT
+
+### Credits
+HDR environment panoramas (studio_small_03, rooitou_park, potsdamer_platz, forest_slope, lebombo, venice_sunset, kiara_1_dawn) are CC0 from [Poly Haven](https://polyhaven.com). All template models and PBR materials are generated procedurally by GLB&ME and are yours to use in any project, including commercial games.

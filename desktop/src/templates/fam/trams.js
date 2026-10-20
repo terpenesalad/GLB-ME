@@ -2,7 +2,7 @@
 // trailer, Z3, articulated B2 and three-section E-class. Trams run along X, centred on the origin,
 // with the rail head at y = 0 (standard gauge 1435 mm) so they sit on the track templates.
 import * as THREE from 'three';
-import { G, csg, planSlab, planPoints, sideSlab, xf } from '../kit.js';
+import { G, csg, clipY, planSlab, planPoints, sideSlab, xf } from '../kit.js';
 import { signTexture } from '../decor.js';
 
 export const GAUGE = 1.435;
@@ -283,7 +283,7 @@ function modernSection(k, parent, sec, o) {
   const side = sideSlab(outline.map(([x, y]) => [x, y]), W + 0.4);
   const plan = planSlab(len, W, [sec.noseA ? o.noseR : 0.06, sec.noseB ? o.noseR : 0.06], yb - 0.2, top + 0.2, { at: [cx, 0, 0], curve: 14 });
   const body = csg(side, [plan], 'and');
-  const band = (y0, y1) => csg(body, [G.box(len + 2, y1 - y0, W + 2, { at: [cx, (y0 + y1) / 2, 0] })], 'and');
+  const band = (y0, y1) => clipY(body, y0, y1);
   for (const b of o.bands) if (b.y1 > b.y0 + 0.01) k.part(b.name, [band(b.y0, b.y1)], b.mat, { parent: g, uv: 'keep' });
   // window pillars over the glazing, doors, door handrails
   const pil = [], doorG = [], doorGlass = [];

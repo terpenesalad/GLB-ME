@@ -332,6 +332,7 @@ export async function insertTemplate(ed, t, fresh = false) {
     if (!hadAnim && r.frameCount) ed.doc.frameCount = r.frameCount;
     if (!hadAnim && r.clips?.length) ed.doc.clips = r.clips;
     if (fresh && r.env) { ed.vp.render.env = r.env; ed.vp.applyRender(); }
+    if (fresh && t.view) { ed.vp.cam.yaw = t.view[0]; ed.vp.cam.pitch = t.view[1]; }
     ed.vp.updateKeyLight?.();
     ed.vp.frame(r.objects.filter((o) => !r.objects.includes(o.ed.parent)));
     ed.refresh?.();

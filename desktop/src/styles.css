@@ -464,3 +464,7 @@ details.adv summary { cursor: default; font-weight: 600; font-size: 12.5px; padd
 .tcard .thumb svg { width: 34px; height: 34px; opacity: 0.5; }
 .tcard .meta span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .tcard:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.libgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.libsw { aspect-ratio: 1; border-radius: 7px; border: 1px solid var(--stroke); padding: 0; overflow: hidden; background: var(--surface-2); }
+.libsw img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.libsw.ring, .libsw:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

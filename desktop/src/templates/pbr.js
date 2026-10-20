@@ -266,7 +266,7 @@ const GEN = {
 function makeTex(canvas, srgb, name) {
   const t = new THREE.CanvasTexture(canvas);
   t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.name = name; t.flipY = true;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.name = name; t.flipY = true; t.userData.mimeType = 'image/jpeg';
   return t;
 }
 /** Renders a generator into colour (cavity AO baked in), normal and roughness textures. */

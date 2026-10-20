@@ -338,7 +338,7 @@ export function buildScene(doc, opts = {}) {
         if (ratio < 1) g = simplifyGeometry(g, ratio);
       }
       const mat = project ? projectMaterial(o.material) : exportMaterial(o.material, !!g.attributes.color);
-      if (!project && mat.normalMap && g.attributes.uv && g.attributes.normal && g.index) { if (g === o.geometry) g = g.clone(); try { g.computeTangents(); } catch { /* degenerate uvs */ } }
+      if (!project && mat.normalMap && g.attributes.uv && g.attributes.normal && g.index) { if (g === o.geometry) g = g.clone(); try { g.computeTangents(); fixTangents(g); } catch { /* degenerate uvs */ } }
       n = new THREE.Mesh(g, mat);
     } else if (isLight(o)) {
       const l = o.ed.light; let L;
@@ -672,3 +672,17 @@ export function zip(entries) {
 
 export const fromArraysGeo = fromArrays;
 export { isGroup };
+
+/** Replaces NaN / zero tangents (from degenerate UVs) with a valid unit tangent perpendicular to the normal. */
+function fixTangents(g) {
+  const t = g.attributes.tangent, n = g.attributes.normal; if (!t || !n) return;
+  const v = new THREE.Vector3(), nn = new THREE.Vector3(), a = new THREE.Vector3();
+  for (let i = 0; i < t.count; i++) {
+    v.set(t.getX(i), t.getY(i), t.getZ(i)); const l = v.length();
+    if (Number.isFinite(l) && Math.abs(l - 1) < 1e-3) continue;
+    nn.fromBufferAttribute(n, i); if (!(nn.lengthSq() > 0)) nn.set(0, 1, 0); nn.normalize();
+    a.set(Math.abs(nn.y) < 0.9 ? 0 : 1, Math.abs(nn.y) < 0.9 ? 1 : 0, 0);
+    if (l > 1e-6 && Number.isFinite(l)) { v.divideScalar(l); v.addScaledVector(nn, -v.dot(nn)); if (v.lengthSq() < 1e-8) v.crossVectors(a, nn); } else v.crossVectors(a, nn);
+    v.normalize(); t.setXYZW(i, v.x, v.y, v.z, Number.isFinite(t.getW(i)) && t.getW(i) !== 0 ? Math.sign(t.getW(i)) : 1);
+  }
+}

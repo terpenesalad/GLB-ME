@@ -7,7 +7,7 @@ import { newMaterial } from '../editor/model.js';
 
 const sets = new Map(); // id -> Promise<{ map, normalMap, roughnessMap }>
 const loader = new THREE.TextureLoader();
-const prep = (t, srgb, name) => { t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.name = name; return t; };
+const prep = (t, srgb, name) => { t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.name = name; t.userData.mimeType = 'image/jpeg'; return t; };
 
 /** Loads (or generates) the texture set of a library material. */
 export function textureSet(id) {

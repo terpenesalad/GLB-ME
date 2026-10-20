@@ -165,8 +165,8 @@ function flowerBed(k) {
 function rocks(k, { seed = 2, big = false } = {}) {
   const rnd = rng(seed), prims = [];
   const n = big ? 1 : 4;
-  for (let i = 0; i < n; i++) { const s = big ? 1.4 : 0.25 + rnd() * 0.35, x = big ? 0 : (rnd() - 0.5) * 1.6, z = big ? 0 : (rnd() - 0.5) * 1.2; prims.push(P.ell([x, s * 0.35, z], [s, s * 0.7, s * 0.85], hex(0x6b6862), { rot: [rnd() * 20, rnd() * 180, rnd() * 20], k: 0.05 })); }
-  const geo = sdfMesh(prims, { res: big ? 120 : 100, noise: { amp: big ? 0.3 : 0.07, freq: big ? 2.2 : 7, oct: 5 }, seed, colorFn: (p, c, nn) => { const v = 0.75 + fbm3(p[0] * 6, p[1] * 6, p[2] * 6) * 0.45; const moss = Math.max(0, Math.min(1, (nn[1] - 0.55) / 0.3)) * 0.4 * fbm3(p[0] * 3, p[1] * 3, p[2] * 3) * 2; return [c[0] * v * (1 - moss) + 0.32 * moss, c[1] * v * (1 - moss) + 0.42 * moss, c[2] * v * (1 - moss) + 0.2 * moss]; } });
+  for (let i = 0; i < n; i++) { const s = big ? 1.4 : 0.25 + rnd() * 0.35, x = big ? 0 : (rnd() - 0.5) * 1.6, z = big ? 0 : (rnd() - 0.5) * 1.2; prims.push(P.rock([x, s * 0.4, z], [s, s * 0.75, s * 0.85], hex(0x6b6862), { seed: seed * 10 + i, k: 0.04, round: 0.12 })); }
+  const geo = sdfMesh(prims, { res: big ? 120 : 100, noise: { amp: big ? 0.08 : 0.025, freq: big ? 3 : 9, oct: 5 }, seed, colorFn: (p, c, nn) => { const v = 0.75 + fbm3(p[0] * 6, p[1] * 6, p[2] * 6) * 0.45; const moss = Math.max(0, Math.min(1, (nn[1] - 0.55) / 0.3)) * 0.4 * fbm3(p[0] * 3, p[1] * 3, p[2] * 3) * 2; return [c[0] * v * (1 - moss) + 0.32 * moss, c[1] * v * (1 - moss) + 0.42 * moss, c[2] * v * (1 - moss) + 0.2 * moss]; } });
   geo.translate(0, -0.06, 0);
   k.part(big ? 'Boulder' : 'Rocks', [geo], k.mat('matte', { color: 0xffffff, name: 'Stone', roughness: 0.92 }), { parent: k.root, uv: 'none', collision: 'convcol' });
   return k;
