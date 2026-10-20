@@ -16,9 +16,9 @@ import { SculptEngine } from '../core/sculpt.js';
 import { texelDensity, sampleColor } from './texpaint.js';
 import { FaceSelection } from '../core/faces.js';
 
-export const ENVS = [['STUDIO', 'Studio'], ['PHOTO', 'Photo studio'], ['DAYLIGHT', 'Daylight'], ['CITY', 'City street'], ['PARK', 'Park'], ['GOLDEN', 'Golden hour'], ['DAWN', 'Dawn'], ['SUNSET', 'Sunset'], ['OVERCAST', 'Overcast'], ['NIGHT', 'Night'], ['NEON', 'Neon'], ['DARK', 'Lights only']];
+export const ENVS = [['STUDIO', 'Studio'], ['PHOTO', 'Photo studio'], ['DAYLIGHT', 'Daylight'], ['CITY', 'City street'], ['FOREST', 'Forest'], ['INTERIOR', 'Apartment'], ['GOLDEN', 'Golden hour'], ['DAWN', 'Dawn'], ['SUNSET', 'Sunset'], ['OVERCAST', 'Overcast'], ['NIGHT', 'Night'], ['NEON', 'Neon'], ['DARK', 'Lights only']];
 /** Real-world HDR panoramas (CC0, Poly Haven) shipped in hdri/. */
-export const HDRIS = { PHOTO: 'studio_small_03_1k', DAYLIGHT: 'lebombo_1k', CITY: 'potsdamer_platz_1k', PARK: 'rooitou_park_1k', GOLDEN: 'venice_sunset_1k', DAWN: 'kiara_1_dawn_1k' };
+export const HDRIS = { PHOTO: 'studio_small_03_1k', DAYLIGHT: 'rooitou_park_1k', PARK: 'rooitou_park_1k', CITY: 'potsdamer_platz_1k', FOREST: 'forest_slope_1k', INTERIOR: 'lebombo_1k', GOLDEN: 'venice_sunset_1k', DAWN: 'kiara_1_dawn_1k' };
 const hdrCache = new Map();
 function loadHdr(name) { if (!hdrCache.has(name)) hdrCache.set(name, new RGBELoader().loadAsync(`hdri/${name}.hdr`).then((t) => { t.mapping = THREE.EquirectangularReflectionMapping; return t; })); return hdrCache.get(name); }
 export const SHADING = [['PBR', 'Realistic', 'sun'], ['MATCAP', 'Matcap', 'circle'], ['FLAT_CLAY', 'Clay', 'cloud'], ['NORMALS', 'Normals', 'compass'], ['UNLIT', 'Unlit', 'lightbulb-off']];
@@ -210,7 +210,7 @@ export class Viewport {
     this.hemi.intensity = 0;
     this.scene.environmentRotation.y = THREE.MathUtils.degToRad(rs.envRotation || 0);
     this.scene.environmentIntensity = rs.envIntensity ?? 1;
-    this.key.intensity = { STUDIO: 1.6, SUNSET: 2.2, OVERCAST: 0.9, NIGHT: 0.6, NEON: 0.8, PHOTO: 0.8, DAYLIGHT: 1.6, CITY: 1.1, PARK: 1.4, GOLDEN: 1.6, DAWN: 1.0 }[id] ?? 1.5;
+    this.key.intensity = { STUDIO: 1.6, SUNSET: 2.2, OVERCAST: 0.9, NIGHT: 0.6, NEON: 0.8, PHOTO: 0.8, DAYLIGHT: 1.6, CITY: 1.1, PARK: 1.6, FOREST: 1.0, INTERIOR: 0.7, GOLDEN: 1.6, DAWN: 1.0 }[id] ?? 1.5;
     this.key.color.set({ SUNSET: 0xffc79a, GOLDEN: 0xffcf9e, DAWN: 0xffd9c2, NIGHT: 0x9db4ff }[id] ?? 0xffffff);
     if (HDRIS[id]) {
       const want = id;

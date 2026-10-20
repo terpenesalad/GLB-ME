@@ -126,6 +126,12 @@ export function planSlab(L, W, r, y0, y1, o = {}) {
   g.translate(0, y1, 0);
   return xf(g, o);
 }
+/** A plan outline [[x, z], …] extruded vertically from y0 to y1 (floors, footpaths, platforms). */
+export function slabXZ(pts, y0, y1, o = {}) {
+  const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, z))), { depth: y1 - y0, bevelEnabled: false, curveSegments: o.curve ?? 12 });
+  g.rotateX(Math.PI / 2); g.translate(0, y1, 0);
+  return xf(g, o);
+}
 /** A side outline [[x, y], …] extruded across z (width W, centred). */
 export function sideSlab(pts, W, o = {}) { return G.extrude(pts, W, { ...o, center: true, curve: o.curve ?? 16 }); }
 
@@ -342,6 +348,17 @@ export class Kit {
   key(obj, frame, fn = null, interp = null) {
     if (fn) fn(obj);
     obj.ed.keys.set(frame, { p: obj.position.toArray(), q: obj.quaternion.toArray(), s: obj.scale.toArray(), ...(interp ? { i: interp } : {}) });
+  }
+  /** Door/window style open–close animation: keys on each object (closed → open → closed) and two clips. */
+  openClose(objs, apply, { frames = 30 } = {}) {
+    for (const o of objs) {
+      const p = o.position.clone(), q = o.quaternion.clone();
+      this.key(o, 0, null, 'ease');
+      apply(o, 1); this.key(o, frames, null, 'ease');
+      o.position.copy(p); o.quaternion.copy(q); this.key(o, frames * 2, null, 'ease');
+    }
+    this.clips = [{ name: 'Open', start: 0, end: frames, loop: false }, { name: 'Close', start: frames, end: frames * 2, loop: false }];
+    this.frameCount = frames * 2;
   }
   async done() {
     // sibling names are unique (Godot / Blender friendly), materials have their textures
