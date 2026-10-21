@@ -903,8 +903,9 @@ export class Viewport {
     const rp = new RenderPass(this.scene, camera);
     const ao = new GTAOPass(this.scene, camera, w, h);
     const hidden = this.aoHidden(), base = ao.overrideVisibility.bind(ao), restore = ao.restoreVisibility.bind(ao);
-    ao.overrideVisibility = () => { base(); for (const o of hidden) { ao._visibilityCache.set(o, o.visible); o.visible = false; } this.scene.traverse((o) => { const m = o.material; if (o.isMesh && m && !Array.isArray(m) && (m.alphaTest > 0 || m.transparent || m.visible === false || m.colorWrite === false)) o.visible = false; }); };
-    ao.restoreVisibility = () => { restore(); };
+    ao.overrideVisibility = () => { this._aoBg = this.scene.background; this.scene.background = null; base(); for (const o of hidden) { ao._visibilityCache.set(o, o.visible); o.visible = false; } this.scene.traverse((o) => { const m = o.material; if (o.isMesh && m && !Array.isArray(m) && (m.alphaTest > 0 || m.transparent || m.visible === false || m.colorWrite === false)) o.visible = false; }); };
+    // the background is drawn as a 2×2 plane; with GTAO's override material it would appear as a black square at the origin
+    ao.restoreVisibility = () => { restore(); this.scene.background = this._aoBg; };
     ao.blendIntensity = 1;
     ao.updateGtaoMaterial({ radius: this.aoRadius || 0.25, distanceExponent: 1, thickness: 1, scale: 1, samples: 16 });
     ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });

@@ -1,3 +1,7 @@
+## GLB&ME 1.3.1 – Fix for the black square
+
+- Fixed a black square that appeared at the centre of every scene when ambient occlusion was on (the viewport background was being drawn into the occlusion pass). Renders and thumbnails are fixed too.
+
 ## GLB&ME 1.3.0 – Asset library: Melbourne, trams, rooms, animals and more
 
 The PC app (Windows, macOS, Linux) gets a library of **144 new procedural templates** built to game-asset quality – every one made of separate, named, editable parts with real-world sizes, PBR materials and clean hierarchies, ready to export to Godot, Blender, Unity or Unreal. The Android app stays on 1.1.0.
